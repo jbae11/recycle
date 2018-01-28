@@ -10,8 +10,6 @@
   <archetypes>
     <spec><lib>cycamore</lib><name>Sink</name></spec>
     <spec><lib>cycamore</lib><name>Source</name></spec>
-    <spec><lib>cycamore</lib><name>Reactor</name></spec>
-    <spec><lib>cycamore</lib><name>Enrichment</name></spec>
     <spec><lib>recycle</lib><name>Corrm</name></spec>
     <spec><lib>agents</lib><name>NullRegion</name></spec>
     <spec><lib>agents</lib><name>NullInst</name></spec>
@@ -53,7 +51,7 @@
         <in_commods>
           <val>waste</val>
         </in_commods>
-        <capacity>1</capacity>
+        <capacity>10000</capacity>
       </Sink>
     </config>
   </facility>
