@@ -1,514 +1,230 @@
+// corrm.cc
+// Implements the Corrm class
 #include "corrm.h"
 
-using cyclus::Material;
-using cyclus::Composition;
-using cyclus::toolkit::ResBuf;
-using cyclus::toolkit::MatVec;
-using cyclus::KeyError;
-using cyclus::ValueError;
-using cyclus::Request;
+namespace corrm {
 
-namespace recycle {
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Corrm::Corrm(cyclus::Context* ctx) : cyclus::Facility(ctx) {
+  cyclus::Warn<cyclus::EXPERIMENTAL_WARNING>(
+      "The Corrm Facility is experimental.");
+};
 
-Corrm::Corrm(cyclus::Context* ctx)
-    : cyclus::Facility(ctx),
-      n_assem_batch(0),
-      assem_size(0),
-      n_assem_core(0),
-      n_assem_spent(0),
-      n_assem_fresh(0),
-      cycle_time(0),
-      refuel_time(0),
-      cycle_step(0),
-      power_cap(0),
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// pragmas
 
-      
+#pragma cyclus def schema corrm::Corrm
 
+#pragma cyclus def annotations corrm::Corrm
 
-      
-      power_name("power"),
-      discharged(false) { }
+#pragma cyclus def initinv corrm::Corrm
 
-#pragma cyclus def clone recycle::Corrm
+#pragma cyclus def snapshotinv corrm::Corrm
 
-#pragma cyclus def schema recycle::Corrm
+#pragma cyclus def infiletodb corrm::Corrm
 
-#pragma cyclus def annotations recycle::Corrm
+#pragma cyclus def snapshot corrm::Corrm
 
-#pragma cyclus def infiletodb recycle::Corrm
+#pragma cyclus def clone corrm::Corrm
 
-#pragma cyclus def snapshot recycle::Corrm
-
-#pragma cyclus def snapshotinv recycle::Corrm
-
-#pragma cyclus def initinv recycle::Corrm
-
+//- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void Corrm::InitFrom(Corrm* m) {
-  #pragma cyclus impl initfromcopy recycle::Corrm
+#pragma cyclus impl initfromcopy corrm::Corrm
   cyclus::toolkit::CommodityProducer::Copy(m);
 }
 
+//- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void Corrm::InitFrom(cyclus::QueryableBackend* b) {
-  #pragma cyclus impl initfromdb recycle::Corrm
+#pragma cyclus impl initfromdb corrm::Corrm
 
-  namespace tk = cyclus::toolkit;
-  tk::CommodityProducer::Add(tk::Commodity(power_name),
-                             tk::CommodInfo(power_cap, power_cap));
+  using cyclus::toolkit::Commodity;
+  Commodity commod = Commodity(out_commods.front());
+  cyclus::toolkit::CommodityProducer::Add(commod);
+  cyclus::toolkit::CommodityProducer::SetCapacity(commod, throughput);
 }
 
+//- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void Corrm::EnterNotify() {
   cyclus::Facility::EnterNotify();
+  buy_policy.Init(this, &inventory, std::string("inventory"));
 
-  // If the user ommitted fuel_prefs, we set it to zeros for each fuel
-  // type.  Without this segfaults could occur - yuck.
-  if (fuel_prefs.size() == 0) {
-    for (int i = 0; i < fuel_outcommods.size(); i++) {
-      fuel_prefs.push_back(cyclus::kDefaultPref);
+  // dummy comp, use in_recipe if provided
+  cyclus::CompMap v;
+  cyclus::Composition::Ptr comp = cyclus::Composition::CreateFromAtom(v);
+  if (in_recipe != "") {
+    comp = context()->GetRecipe(in_recipe);
+  }
+
+  if (in_commod_prefs.size() == 0) {
+    for (int i = 0; i < in_commods.size(); ++i) {
+      in_commod_prefs.push_back(cyclus::kDefaultPref);
     }
+  } else if (in_commod_prefs.size() != in_commods.size()) {
+    std::stringstream ss;
+    ss << "in_commod_prefs has " << in_commod_prefs.size()
+       << " values, expected " << in_commods.size();
+    throw cyclus::ValueError(ss.str());
   }
 
-  // input consistency checking:
-  int n = recipe_change_times.size();
-  std::stringstream ss;
-  if (recipe_change_commods.size() != n) {
-    ss << "prototype '" << prototype() << "' has "
-       << recipe_change_commods.size()
-       << " recipe_change_commods vals, expected " << n << "\n";
+  for (int i = 0; i != in_commods.size(); ++i) {
+    buy_policy.Set(in_commods[i], comp, in_commod_prefs[i]);
   }
-  if (recipe_change_in.size() != n) {
-    ss << "prototype '" << prototype() << "' has " << recipe_change_in.size()
-       << " recipe_change_in vals, expected " << n << "\n";
-  }
-  if (recipe_change_out.size() != n) {
-    ss << "prototype '" << prototype() << "' has " << recipe_change_out.size()
-       << " recipe_change_out vals, expected " << n << "\n";
-  }
+  buy_policy.Start();
 
-  n = pref_change_times.size();
-  if (pref_change_commods.size() != n) {
-    ss << "prototype '" << prototype() << "' has " << pref_change_commods.size()
-       << " pref_change_commods vals, expected " << n << "\n";
-  }
-  if (pref_change_values.size() != n) {
-    ss << "prototype '" << prototype() << "' has " << pref_change_values.size()
-       << " pref_change_values vals, expected " << n << "\n";
-  }
-
-  if (ss.str().size() > 0) {
+  if (out_commods.size() == 1) {
+    sell_policy.Init(this, &stocks, std::string("stocks"))
+        .Set(out_commods.front())
+        .Start();
+  } else {
+    std::stringstream ss;
+    ss << "out_commods has " << out_commods.size() << " values, expected 1.";
     throw cyclus::ValueError(ss.str());
   }
 }
 
-bool Corrm::CheckDecommissionCondition() {
-  return core.count() == 0 && spent.count() == 0;
-}
-
-void Corrm::Tick() {
-  // The following code must go in the Tick so they fire on the time step
-  // following the cycle_step update - allowing for the all Corrm events to
-  // occur and be recorded on the "beginning" of a time step.  Another reason
-  // they
-  // can't go at the beginnin of the Tock is so that resource exchange has a
-  // chance to occur after the discharge on this same time step.
-
-  if (retired()) {
-    Record("RETIRED", "");
-
-    // record the last time series entry if the Corrm was operating at the
-    // time of retirement.
-    if (exit_time() == context()->time()) {
-      if (cycle_step > 0 && cycle_step <= cycle_time &&
-          core.count() == n_assem_core) {
-        cyclus::toolkit::RecordTimeSeries<cyclus::toolkit::POWER>(this, power_cap);
-      } else {
-        cyclus::toolkit::RecordTimeSeries<cyclus::toolkit::POWER>(this, 0);
-      }
-    }
-
-    if (context()->time() == exit_time()) { // only need to transmute once
-      Transmute(ceil(static_cast<double>(n_assem_core) / 2.0));
-    }
-    while (core.count() > 0) {
-      if (!Discharge()) {
-        break;
-      }
-    }
-    // in case a cycle lands exactly on our last time step, we will need to
-    // burn a batch from fresh inventory on this time step.  When retired,
-    // this batch also needs to be discharged to spent fuel inventory.
-    while (fresh.count() > 0 && spent.space() >= assem_size) {
-      spent.Push(fresh.Pop());
-    }
-    return;
-  }
-
-  if (cycle_step == cycle_time) {
-    Transmute();
-    Record("CYCLE_END", "");
-  }
-
-  if (cycle_step >= cycle_time && !discharged) {
-    discharged = Discharge();
-  }
-  if (cycle_step >= cycle_time) {
-    Load();
-  }
-
-  int t = context()->time();
-
-  // update preferences
-  for (int i = 0; i < pref_change_times.size(); i++) {
-    int change_t = pref_change_times[i];
-    if (t != change_t) {
-      continue;
-    }
-
-    std::string incommod = pref_change_commods[i];
-    for (int j = 0; j < fuel_incommods.size(); j++) {
-      if (fuel_incommods[j] == incommod) {
-        fuel_prefs[j] = pref_change_values[i];
-        break;
-      }
-    }
-  }
-
-  // update recipes
-  for (int i = 0; i < recipe_change_times.size(); i++) {
-    int change_t = recipe_change_times[i];
-    if (t != change_t) {
-      continue;
-    }
-
-    std::string incommod = recipe_change_commods[i];
-    for (int j = 0; j < fuel_incommods.size(); j++) {
-      if (fuel_incommods[j] == incommod) {
-        fuel_inrecipes[j] = recipe_change_in[i];
-        fuel_outrecipes[j] = recipe_change_out[i];
-        break;
-      }
-    }
-  }
-}
-
-std::set<cyclus::RequestPortfolio<Material>::Ptr> Corrm::GetMatlRequests() {
-  using cyclus::RequestPortfolio;
-
-  std::set<RequestPortfolio<Material>::Ptr> ports;
-  Material::Ptr m;
-
-  // second min expression reduces assembles to amount needed until
-  // retirement if it is near.
-  int n_assem_order = n_assem_core - core.count() + n_assem_fresh - fresh.count();
-
-  if (exit_time() != -1) {
-    // the +1 accounts for the fact that the Corrm is alive and gets to
-    // operate during its exit_time time step.
-    int t_left = exit_time() - context()->time() + 1;
-    int t_left_cycle = cycle_time + refuel_time - cycle_step;
-    double n_cycles_left = static_cast<double>(t_left - t_left_cycle) /
-                         static_cast<double>(cycle_time + refuel_time);
-    n_cycles_left = ceil(n_cycles_left);
-    int n_need = std::max(0.0, n_cycles_left * n_assem_batch - n_assem_fresh + n_assem_core - core.count());
-    n_assem_order = std::min(n_assem_order, n_need);
-  }
-
-  if (n_assem_order == 0) {
-    return ports;
-  } else if (retired()) {
-    return ports;
-  }
-
-  for (int i = 0; i < n_assem_order; i++) {
-    RequestPortfolio<Material>::Ptr port(new RequestPortfolio<Material>());
-    std::vector<Request<Material>*> mreqs;
-    for (int j = 0; j < fuel_incommods.size(); j++) {
-      std::string commod = fuel_incommods[j];
-      double pref = fuel_prefs[j];
-      Composition::Ptr recipe = context()->GetRecipe(fuel_inrecipes[j]);
-      m = Material::CreateUntracked(assem_size, recipe);
-      Request<Material>* r = port->AddRequest(m, this, commod, pref, true);
-      mreqs.push_back(r);
-    }
-    port->AddMutualReqs(mreqs);
-    ports.insert(port);
-  }
-
-  return ports;
-}
-
-void Corrm::GetMatlTrades(
-    const std::vector<cyclus::Trade<Material> >& trades,
-    std::vector<std::pair<cyclus::Trade<Material>, Material::Ptr> >&
-        responses) {
-  using cyclus::Trade;
-
-  std::map<std::string, MatVec> mats = PopSpent();
-  for (int i = 0; i < trades.size(); i++) {
-    std::string commod = trades[i].request->commodity();
-    Material::Ptr m = mats[commod].back();
-    mats[commod].pop_back();
-    responses.push_back(std::make_pair(trades[i], m));
-    res_indexes.erase(m->obj_id());
-  }
-  PushSpent(mats);  // return leftovers back to spent buffer
-}
-
-void Corrm::AcceptMatlTrades(const std::vector<
-    std::pair<cyclus::Trade<Material>, Material::Ptr> >& responses) {
-  std::vector<std::pair<cyclus::Trade<cyclus::Material>,
-                        cyclus::Material::Ptr> >::const_iterator trade;
-
+//- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+std::string Corrm::str() {
   std::stringstream ss;
-  int nload = std::min((int)responses.size(), n_assem_core - core.count());
-  if (nload > 0) {
-    ss << nload << " assemblies";
-    Record("LOAD", ss.str());
-  }
-
-  for (trade = responses.begin(); trade != responses.end(); ++trade) {
-    std::string commod = trade->first.request->commodity();
-    Material::Ptr m = trade->second;
-    index_res(m, commod);
-
-    if (core.count() < n_assem_core) {
-      core.Push(m);
-    } else {
-      fresh.Push(m);
-    }
-  }
-}
-
-std::set<cyclus::BidPortfolio<Material>::Ptr> Corrm::GetMatlBids(
-    cyclus::CommodMap<Material>::type& commod_requests) {
-  using cyclus::BidPortfolio;
-
-  std::set<BidPortfolio<Material>::Ptr> ports;
-
-  bool gotmats = false;
-  std::map<std::string, MatVec> all_mats;
-
-  if (uniq_outcommods_.empty()) {
-    for (int i = 0; i < fuel_outcommods.size(); i++) {
-      uniq_outcommods_.insert(fuel_outcommods[i]);
-    }
-  }
-
-  std::set<std::string>::iterator it;
-  for (it = uniq_outcommods_.begin(); it != uniq_outcommods_.end(); ++it) {
-    std::string commod = *it;
-    std::vector<Request<Material>*>& reqs = commod_requests[commod];
-    if (reqs.size() == 0) {
-      continue;
-    } else if (!gotmats) {
-      all_mats = PeekSpent();
-    }
-
-    MatVec mats = all_mats[commod];
-    if (mats.size() == 0) {
-      continue;
-    }
-
-    BidPortfolio<Material>::Ptr port(new BidPortfolio<Material>());
-
-    for (int j = 0; j < reqs.size(); j++) {
-      Request<Material>* req = reqs[j];
-      double tot_bid = 0;
-      for (int k = 0; k < mats.size(); k++) {
-        Material::Ptr m = mats[k];
-        tot_bid += m->quantity();
-        port->AddBid(req, m, this, true);
-        if (tot_bid >= req->target()->quantity()) {
-          break;
-        }
-      }
-    }
-
-    double tot_qty = 0;
-    for (int j = 0; j < mats.size(); j++) {
-      tot_qty += mats[j]->quantity();
-    }
-    cyclus::CapacityConstraint<Material> cc(tot_qty);
-    port->AddConstraint(cc);
-    ports.insert(port);
-  }
-
-  return ports;
-}
-
-void Corrm::Tock() {
-  if (retired()) {
-    return;
-  }
-
-  if (cycle_step >= cycle_time + refuel_time && core.count() == n_assem_core) {
-    discharged = false;
-    cycle_step = 0;
-  }
-
-  if (cycle_step == 0 && core.count() == n_assem_core) {
-    Record("CYCLE_START", "");
-  }
-
-  if (cycle_step >= 0 && cycle_step < cycle_time &&
-      core.count() == n_assem_core) {
-    cyclus::toolkit::RecordTimeSeries<cyclus::toolkit::POWER>(this, power_cap);
+  std::string ans, out_str;
+  if (out_commods.size() == 1) {
+    out_str = out_commods.front();
   } else {
-    cyclus::toolkit::RecordTimeSeries<cyclus::toolkit::POWER>(this, 0);
+    out_str = "";
   }
-
-  // "if" prevents starting cycle after initial deployment until core is full
-  // even though cycle_step is its initial zero.
-  if (cycle_step > 0 || core.count() == n_assem_core) {
-    cycle_step++;
+  if (cyclus::toolkit::CommodityProducer::Produces(
+          cyclus::toolkit::Commodity(out_str))) {
+    ans = "yes";
+  } else {
+    ans = "no";
   }
+  ss << cyclus::Facility::str();
+  ss << " has facility parameters {"
+     << "\n"
+     << "     Output Commodity = " << out_str << ",\n"
+     << "     Residence Time = " << residence_time << ",\n"
+     << "     Throughput = " << throughput << ",\n"
+     << " commod producer members: "
+     << " produces " << out_str << "?:" << ans << "'}";
+  return ss.str();
 }
 
-void Corrm::Transmute() { Transmute(n_assem_batch); }
+//- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void Corrm::Tick() {
+  // Set available capacity for Buy Policy
+  inventory.capacity(current_capacity());
 
-void Corrm::Transmute(int n_assem) {
-  MatVec old = core.PopN(std::min(n_assem, core.count()));
-  core.Push(old);
-  if (core.count() > old.size()) {
-    // rotate untransmuted mats back to back of buffer
-    core.Push(core.PopN(core.count() - old.size()));
+  LOG(cyclus::LEV_INFO3, "ComCnv") << prototype() << " is ticking {";
+
+  if (current_capacity() > cyclus::eps_rsrc()) {
+    LOG(cyclus::LEV_INFO4, "ComCnv")
+        << " has capacity for " << current_capacity() << " kg of material.";
   }
-
-  std::stringstream ss;
-  ss << old.size() << " assemblies";
-  Record("TRANSMUTE", ss.str());
-
-  for (int i = 0; i < old.size(); i++) {
-    old[i]->Transmute(context()->GetRecipe(fuel_outrecipe(old[i])));
-  }
+  LOG(cyclus::LEV_INFO3, "ComCnv") << "}";
 }
 
-std::map<std::string, MatVec> Corrm::PeekSpent() {
-  std::map<std::string, MatVec> mapped;
-  MatVec mats = spent.PopN(spent.count());
-  spent.Push(mats);
-  for (int i = 0; i < mats.size(); i++) {
-    std::string commod = fuel_outcommod(mats[i]);
-    mapped[commod].push_back(mats[i]);
-  }
-  return mapped;
-}
+//- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void Corrm::Tock() {
+  LOG(cyclus::LEV_INFO3, "ComCnv") << prototype() << " is tocking {";
 
-bool Corrm::Discharge() {
-  int npop = std::min(n_assem_batch, core.count());
-  if (n_assem_spent - spent.count() < npop) {
-    Record("DISCHARGE", "failed");
-    return false;  // not enough room in spent buffer
+  BeginProcessing_();  // place unprocessed inventory into processing
+
+  if (ready_time() >= 0 || residence_time == 0 && !inventory.empty()) {
+    ReadyMatl_(ready_time());  // place processing into ready
   }
 
-  std::stringstream ss;
-  ss << npop << " assemblies";
-  Record("DISCHARGE", ss.str());
+  ProcessMat_(throughput);  // place ready into stocks
 
-  spent.Push(core.PopN(npop));
-  return true;
+  LOG(cyclus::LEV_INFO3, "ComCnv") << "}";
 }
 
-void Corrm::Load() {
-  int n = std::min(n_assem_core - core.count(), fresh.count());
-  if (n == 0) {
-    return;
+//- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void Corrm::AddMat_(cyclus::Material::Ptr mat) {
+  LOG(cyclus::LEV_INFO5, "ComCnv") << prototype() << " is initially holding "
+                                   << inventory.quantity() << " total.";
+
+  try {
+    inventory.Push(mat);
+  } catch (cyclus::Error& e) {
+    e.msg(Agent::InformErrorMsg(e.msg()));
+    throw e;
   }
 
-  std::stringstream ss;
-  ss << n << " assemblies";
-  Record("LOAD", ss.str());
-  core.Push(fresh.PopN(n));
+  LOG(cyclus::LEV_INFO5, "ComCnv")
+      << prototype() << " added " << mat->quantity()
+      << " of material to its inventory, which is holding "
+      << inventory.quantity() << " total.";
 }
 
-std::string Corrm::fuel_incommod(Material::Ptr m) {
-  int i = res_indexes[m->obj_id()];
-  if (i >= fuel_incommods.size()) {
-    throw KeyError("recycle::Corrm - no incommod for material object");
-  }
-  return fuel_incommods[i];
-}
+//- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void Corrm::BeginProcessing_() {
+  while (inventory.count() > 0) {
+    try {
+      processing.Push(inventory.Pop());
+      entry_times.push_back(context()->time());
 
-std::string Corrm::fuel_outcommod(Material::Ptr m) {
-  int i = res_indexes[m->obj_id()];
-  if (i >= fuel_outcommods.size()) {
-    throw KeyError("recycle::Corrm - no outcommod for material object");
-  }
-  return fuel_outcommods[i];
-}
-
-std::string Corrm::fuel_inrecipe(Material::Ptr m) {
-  int i = res_indexes[m->obj_id()];
-  if (i >= fuel_inrecipes.size()) {
-    throw KeyError("recycle::Corrm - no inrecipe for material object");
-  }
-  return fuel_inrecipes[i];
-}
-
-std::string Corrm::fuel_outrecipe(Material::Ptr m) {
-  int i = res_indexes[m->obj_id()];
-  if (i >= fuel_outrecipes.size()) {
-    throw KeyError("recycle::Corrm - no outrecipe for material object");
-  }
-  return fuel_outrecipes[i];
-}
-
-double Corrm::fuel_pref(Material::Ptr m) {
-  int i = res_indexes[m->obj_id()];
-  if (i >= fuel_prefs.size()) {
-    return 0;
-  }
-  return fuel_prefs[i];
-}
-
-void Corrm::index_res(cyclus::Resource::Ptr m, std::string incommod) {
-  for (int i = 0; i < fuel_incommods.size(); i++) {
-    if (fuel_incommods[i] == incommod) {
-      res_indexes[m->obj_id()] = i;
-      return;
+      LOG(cyclus::LEV_DEBUG2, "ComCnv")
+          << "   " << prototype()
+          << " added resources to processing at t= " << context()->time();
+    } catch (cyclus::Error& e) {
+      e.msg(Agent::InformErrorMsg(e.msg()));
+      throw e;
     }
   }
-  throw ValueError(
-      "recycle::Corrm - received unsupported incommod material");
 }
 
-std::map<std::string, MatVec> Corrm::PopSpent() {
-  MatVec mats = spent.PopN(spent.count());
-  std::map<std::string, MatVec> mapped;
-  for (int i = 0; i < mats.size(); i++) {
-    std::string commod = fuel_outcommod(mats[i]);
-    mapped[commod].push_back(mats[i]);
+//- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void Corrm::ProcessMat_(double cap) {
+  using cyclus::Material;
+  using cyclus::ResCast;
+  using cyclus::toolkit::ResBuf;
+  using cyclus::toolkit::Manifest;
+
+  if (!ready.empty()) {
+    try {
+      double max_pop = std::min(cap, ready.quantity());
+
+      if (discrete_handling) {
+        if (max_pop == ready.quantity()) {
+          stocks.Push(ready.PopN(ready.count()));
+        } else {
+          double cap_pop = ready.Peek()->quantity();
+          while (cap_pop <= max_pop && !ready.empty()) {
+            stocks.Push(ready.Pop());
+            cap_pop += ready.empty() ? 0 : ready.Peek()->quantity();
+          }
+        }
+      } else {
+        stocks.Push(ready.Pop(max_pop, cyclus::eps_rsrc()));
+      }
+
+      LOG(cyclus::LEV_INFO1, "ComCnv") << "Corrm " << prototype()
+                                       << " moved resources"
+                                       << " from ready to stocks"
+                                       << " at t= " << context()->time();
+    } catch (cyclus::Error& e) {
+      e.msg(Agent::InformErrorMsg(e.msg()));
+      throw e;
+    }
+  }
+}
+
+//- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void Corrm::ReadyMatl_(int time) {
+  using cyclus::toolkit::ResBuf;
+
+  int to_ready = 0;
+
+  while (!entry_times.empty() && entry_times.front() <= time) {
+    entry_times.pop_front();
+    ++to_ready;
   }
 
-  // needed so we trade away oldest assemblies first
-  std::map<std::string, MatVec>::iterator it;
-  for (it = mapped.begin(); it != mapped.end(); ++it) {
-    std::reverse(it->second.begin(), it->second.end());
-  }
-
-  return mapped;
+  ready.Push(processing.PopN(to_ready));
 }
 
-void Corrm::PushSpent(std::map<std::string, MatVec> leftover) {
-  std::map<std::string, MatVec>::iterator it;
-  for (it = leftover.begin(); it != leftover.end(); ++it) {
-    // undo reverse in PopSpent to make sure oldest assemblies come out first
-    std::reverse(it->second.begin(), it->second.end());
-    spent.Push(it->second);
-  }
-}
-
-void Corrm::Record(std::string name, std::string val) {
-  context()
-      ->NewDatum("CorrmEvents")
-      ->AddVal("AgentId", id())
-      ->AddVal("Time", context()->time())
-      ->AddVal("Event", name)
-      ->AddVal("Value", val)
-      ->Record();
-}
-
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 extern "C" cyclus::Agent* ConstructCorrm(cyclus::Context* ctx) {
   return new Corrm(ctx);
 }
 
-}  // namespace recycle
+}  // namespace corrm

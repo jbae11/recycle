@@ -30,16 +30,14 @@
     <name>Corrm</name>
     <config>
       <Corrm>
-        <fuel_inrecipes>  <val>natl_u</val>      </fuel_inrecipes>
-        <fuel_outrecipes> <val>used_fuel_recipe</val> </fuel_outrecipes>
-        <fuel_incommods>  <val>natl_u</val>       </fuel_incommods>
-        <fuel_outcommods> <val>waste</val>            </fuel_outcommods>
-
-        <cycle_time>1</cycle_time>
-        <refuel_time>0</refuel_time>
-        <assem_size>2</assem_size>
-        <n_assem_core>1</n_assem_core>
-        <n_assem_batch>1</n_assem_batch>
+        <in_commods>
+            <val>natl_u</val>
+        </in_commods>
+        <out_commods>
+            <val>waste</val>
+        </out_commods>
+        <residence_time>1</residence_time>
+        <throughput>1000</throughput>
       </Corrm>
     </config>
   </facility>

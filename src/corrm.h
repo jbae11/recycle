@@ -1,345 +1,222 @@
-#ifndef RECYCLE_SRC_CORRM_H_
-#define RECYCLE_SRC_CORRM_H_
+#ifndef CYCLUS_RECYCLE_CORRM_H
+#define CYCLUS_RECYCLE_CORRM_H
+
+#include <string>
+#include <list>
+#include <vector>
 
 #include "cyclus.h"
-#include "recycle_version.h"
 
-namespace recycle {
+// forward declaration
+namespace corrm {
+class Corrm;
+} // namespace corrm
 
 
-/// CORRM is the Continuous Online Reprocessing Reactor Module for CYCLUS.
-/// It is created by first creating a skeleton reactor module that does
-/// depletion calculation given various parameters,
-/// and accepts fuel and does online reprocessing.
-/// Then various depletion calculations can be created
-/// by creating a Reduced-Order-Module from RAVEN
-/// through a SERPENT interface.
+namespace corrm {
+/// @class Corrm
+///
+/// This Facility is intended to hold materials for a user specified
+/// amount of time in order to model a storage facility with a certain
+/// residence time or holdup time.
+/// The Storage class inherits from the Facility class and is
+/// dynamically loaded by the Agent class when requested.
+///
+/// @section intro Introduction
+/// This Agent was initially developed to support the fco code-to-code 
+/// comparison.
+/// It's very similar to the "NullFacility" of years 
+/// past. Its purpose is to hold materials and release them only  
+/// after some period of delay time.
+///
+/// @section agentparams Agent Parameters
+/// in_commods is a vector of strings naming the commodities that this facility receives
+/// out_commods is a string naming the commodity that in_commod is stocks into
+/// residence_time is the minimum number of timesteps between receiving and offering
+/// in_recipe (optional) describes the incoming resource by recipe
 /// 
-
-/// Due to the restrictions with generating a reduced order model,
-/// the geometry or the design of the reactor model is fixed.
-/// However, the developmental plan is to create more ROMs with
-/// other geometries and core designs. The first one to be done is
-/// the Molten Salt Breeder Reactor by Robertson.
-
-
-
-
-class Corrm : public cyclus::Facility,
-  public cyclus::toolkit::CommodityProducer {
-#pragma cyclus note { \
-"niche": "corrm", \
-"doc": \
-  " CORRM is the Continuous Online Reprocessing Reactor Module for CYCLUS."\
-  " It is created by first creating a skeleton reactor module that does"\
-  " depletion calculation given various parameters,"\
-  " and accepts fuel and does online reprocessing."\
-  " Then various depletion calculations can be created" \
-  " by creating a Reduced-Order-Module from RAVEN"\
-  " through a SERPENT interface."\
-  "\n\n "\
-  " Due to the restrictions with generating a reduced order model," \
-  " the geometry or the design of the reactor model is fixed."\
-  " However, the developmental plan is to create more ROMs with"\
-  " other geometries and core designs. The first one to be done is"\
-  " the Molten Salt Breeder Reactor by Robertson."\
-  "", \
-}
-
- public:
+/// @section optionalparams Optional Parameters
+/// max_inv_size is the maximum capacity of the inventory storage
+/// throughput is the maximum processing capacity per timestep
+///
+/// @section detailed Detailed Behavior
+/// 
+/// Tick:
+/// Nothing really happens on the tick. 
+///
+/// Tock:
+/// On the tock, any material that has been waiting for long enough (delay 
+/// time) is placed in the stocks buffer.
+///
+/// Any brand new inventory that was received in this timestep is placed into 
+/// the processing queue to begin waiting. 
+/// 
+/// Making Requests:
+/// This facility requests all of the in_commod that it can.
+///
+/// Receiving Resources:
+/// Anything of the in_commod that is received by this facility goes into the 
+/// inventory.
+///
+/// Making Offers:
+/// Any stocks material in the stocks buffer is offered to the market.
+///
+/// Sending Resources:
+/// Matched resources are sent immediately.
+class Corrm 
+  : public cyclus::Facility,
+    public cyclus::toolkit::CommodityProducer {
+ public:  
+  /// @param ctx the cyclus context for access to simulation-wide parameters
   Corrm(cyclus::Context* ctx);
-  virtual ~Corrm(){};
-
-  virtual std::string version() { return RECYCLE_VERSION; }
-
-  virtual void Tick();
-  virtual void Tock();
-  virtual void EnterNotify();
-  virtual bool CheckDecommissionCondition();
-
-  virtual void AcceptMatlTrades(const std::vector<std::pair<
-      cyclus::Trade<cyclus::Material>, cyclus::Material::Ptr> >& responses);
-
-  virtual std::set<cyclus::RequestPortfolio<cyclus::Material>::Ptr>
-  GetMatlRequests();
-
-  virtual std::set<cyclus::BidPortfolio<cyclus::Material>::Ptr> GetMatlBids(
-      cyclus::CommodMap<cyclus::Material>::type& commod_requests);
-
-  virtual void GetMatlTrades(
-      const std::vector<cyclus::Trade<cyclus::Material> >& trades,
-      std::vector<std::pair<cyclus::Trade<cyclus::Material>,
-                            cyclus::Material::Ptr> >& responses);
-
+  
   #pragma cyclus decl
 
- private:
-  std::string fuel_incommod(cyclus::Material::Ptr m);
-  std::string fuel_outcommod(cyclus::Material::Ptr m);
-  std::string fuel_inrecipe(cyclus::Material::Ptr m);
-  std::string fuel_outrecipe(cyclus::Material::Ptr m);
-  double fuel_pref(cyclus::Material::Ptr m);
+  #pragma cyclus note {"doc": "Storage is a simple facility which accepts any number of commodities " \
+                              "and holds them for a user specified amount of time. The commodities accepted "\
+                              "are chosen based on the specified preferences list. Once the desired amount of material "\
+                              "has entered the facility it is passed into a 'processing' buffer where it is held until "\
+                              "the residence time has passed. The material is then passed into a 'ready' buffer where it is "\
+                              "queued for removal. Currently, all input commodities are lumped into a single output commodity. "\
+                              "Storage also has the functionality to handle materials in discrete or continuous batches. Discrete "\
+                              "mode, which is the default, does not split or combine material batches. Continuous mode, however, "\
+                              "divides material batches if necessary in order to push materials through the facility as quickly "\
+                              "as possible."}
 
-  bool retired() {
-    return exit_time() != -1 && context()->time() >= exit_time();
-  }
+  /// A verbose printer for the Storage Facility
+  virtual std::string str();
 
-  /// Store fuel info index for the given resource received on incommod.
-  void index_res(cyclus::Resource::Ptr m, std::string incommod);
+  // --- Facility Members ---
+  
+  // --- Agent Members ---
+  /// Sets up the Storage Facility's trade requests
+  virtual void EnterNotify();
 
-  /// Discharge a batch from the core if there is room in the spent fuel
-  /// inventory.  Returns true if a batch was successfully discharged.
-  bool Discharge();
+  /// The handleTick function specific to the Storage.
+  virtual void Tick();
 
-  /// Top up core inventory as much as possible.
-  void Load();
+  /// The handleTick function specific to the Storage.
+  virtual void Tock();
 
-  /// Transmute the batch that is about to be discharged from the core to its
-  /// fully burnt state as defined by its outrecipe.
-  void Transmute();
+ protected:
+  ///   @brief adds a material into the incoming commodity inventory
+  ///   @param mat the material to add to the incoming inventory.
+  ///   @throws if there is trouble with pushing to the inventory buffer.
+  void AddMat_(cyclus::Material::Ptr mat);
 
-  /// Transmute the specified number of assemblies in the core to their
-  /// fully burnt state as defined by their outrecipe.
-  void Transmute(int n_assem);
+  /// @brief Move all unprocessed inventory to processing
+  void BeginProcessing_();
 
-  /// Records a reactor event to the output db with the given name and note val.
-  void Record(std::string name, std::string val);
+  /// @brief Move as many ready resources as allowable into stocks
+  /// @param cap current throughput capacity 
+  void ProcessMat_(double cap);
 
-  /// Complement of PopSpent - must be called with all materials passed that
-  /// were not traded away to other agents.
-  void PushSpent(std::map<std::string, cyclus::toolkit::MatVec> leftover);
+  /// @brief move ready resources from processing to ready at a certain time
+  /// @param time the time of interest
+  void ReadyMatl_(int time);
 
-  /// Returns all spent assemblies indexed by outcommod - removing them from
-  /// the spent fuel buffer.
-  std::map<std::string, cyclus::toolkit::MatVec> PopSpent();
+    /* --- Storage Members --- */
 
-  /// Returns all spent assemblies indexed by outcommod without removing them
-  /// from the spent fuel buffer.
-  std::map<std::string, cyclus::toolkit::MatVec> PeekSpent();
+  /// @brief current maximum amount that can be added to processing
+  inline double current_capacity() const { 
+    return (max_inv_size - processing.quantity() - stocks.quantity()); }
 
-  /////// fuel specifications /////////
-  #pragma cyclus var { \
-    "uitype": ["oneormore", "incommodity"], \
-    "uilabel": "Fresh Fuel Commodity List", \
-    "doc": "Ordered list of input commodities on which to requesting fuel.", \
-  }
-  std::vector<std::string> fuel_incommods;
-  #pragma cyclus var { \
-    "uitype": ["oneormore", "inrecipe"], \
-    "uilabel": "Fresh Fuel Recipe List", \
-    "doc": "Fresh fuel recipes to request for each of the given fuel input " \
-           "commodities (same order).", \
-  }
-  std::vector<std::string> fuel_inrecipes;
+  /// @brief returns the time key for ready materials
+  int ready_time(){ return context()->time() - residence_time; }
 
-  #pragma cyclus var { \
-    "default": [], \
-    "uilabel": "Fresh Fuel Preference List", \
-    "doc": "The preference for each type of fresh fuel requested corresponding"\
-           " to each input commodity (same order).  If no preferences are " \
-           "specified, 1.0 is used for all fuel " \
-           "requests (default).", \
-  }
-  std::vector<double> fuel_prefs;
-  #pragma cyclus var { \
-    "uitype": ["oneormore", "outcommodity"], \
-    "uilabel": "Spent Fuel Commodity List", \
-    "doc": "Output commodities on which to offer spent fuel originally " \
-           "received as each particular input commodity (same order)." \
-  }
-  std::vector<std::string> fuel_outcommods;
-  #pragma cyclus var {		       \
-    "uitype": ["oneormore", "outrecipe"], \
-    "uilabel": "Spent Fuel Recipe List", \
-    "doc": "Spent fuel recipes corresponding to the given fuel input " \
-           "commodities (same order)." \
-           " Fuel received via a particular input commodity is transmuted to " \
-           "the recipe specified here after being burned during a cycle.", \
-  }
-  std::vector<std::string> fuel_outrecipes;
+  /* --- Module Members --- */
 
-  ///////////// recipe changes ///////////
-  #pragma cyclus var { \
-    "default": [], \
-    "uilabel": "Time to Change Fresh/Spent Fuel Recipe", \
-    "doc": "A time step on which to change the input-output recipe pair for " \
-           "a requested fresh fuel.", \
-  }
-  std::vector<int> recipe_change_times;
-  #pragma cyclus var { \
-    "default": [], \
-    "uilabel": "Commodity for Changed Fresh/Spent Fuel Recipe", \
-    "doc": "The input commodity indicating fresh fuel for which recipes will " \
-           "be changed. Same order as and direct correspondence to the " \
-           "specified recipe change times.", \
-    "uitype": ["oneormore", "incommodity"], \
-  }
-  std::vector<std::string> recipe_change_commods;
-  #pragma cyclus var { \
-    "default": [], \
-    "uilabel": "New Recipe for Fresh Fuel", \
-    "doc": "The new input recipe to use for this recipe change." \
-           " Same order as and direct correspondence to the specified recipe " \
-           "change times.", \
-    "uitype": ["oneormore", "inrecipe"], \
-  }
-  std::vector<std::string> recipe_change_in;
-  #pragma cyclus var { \
-    "default": [], \
-    "uilabel": "New Recipe for Spent Fuel", \
-    "doc": "The new output recipe to use for this recipe change." \
-           " Same order as and direct correspondence to the specified recipe " \
-           "change times.", \
-    "uitype": ["oneormore", "outrecipe"], \
-  }
-  std::vector<std::string> recipe_change_out;
+  #pragma cyclus var {"tooltip":"input commodity",\
+                      "doc":"commodities accepted by this facility",\
+                      "uilabel":"Input Commodities",\
+                      "uitype":["oneormore","incommodity"]}
+  std::vector<std::string> in_commods;
 
- //////////// inventory and core params ////////////
-  #pragma cyclus var { \
-    "doc": "Mass (kg) of a single assembly.",	\
-    "uilabel": "Assembly Mass", \
-    "uitype": "range", \
-    "range": [1.0, 1e5], \
-    "units": "kg", \
-  }
-  double assem_size;
+  #pragma cyclus var {"default": [],\
+                      "doc":"preferences for each of the given commodities, in the same order."\
+                      "Defauts to 1 if unspecified",\
+                      "uilabel":"In Commody Preferences", \
+                      "range": [None, [1e-299, 1e299]], \
+                      "uitype":["oneormore", "range"]}
+  std::vector<double> in_commod_prefs;
 
-  #pragma cyclus var { \
-    "uilabel": "Number of Assemblies per Batch", \
-    "doc": "Number of assemblies that constitute a single batch.  " \
-           "This is the number of assemblies discharged from the core fully " \
-           "burned each cycle."						\
-           "Batch size is equivalent to ``n_assem_batch / n_assem_core``.", \
-  }
-  int n_assem_batch;
-  #pragma cyclus var { \
-    "default": 3, \
-    "uilabel": "Number of Assemblies in Core", \
-    "uitype": "range", \
-    "range": [1,3], \
-    "doc": "Number of assemblies that constitute a full core.", \
-  }
-  int n_assem_core;
-  #pragma cyclus var { \
-    "default": 0, \
-    "uilabel": "Minimum Fresh Fuel Inventory", \
-    "uitype": "range", \
-    "range": [0,3], \
-    "units": "assemblies", \
-    "doc": "Number of fresh fuel assemblies to keep on-hand if possible.", \
-  }
-  int n_assem_fresh;
-  #pragma cyclus var { \
-    "default": 1000000000, \
-    "uilabel": "Maximum Spent Fuel Inventory", \
-    "uitype": "range", \
-    "range": [0, 1000000000], \
-    "units": "assemblies", \
-    "doc": "Number of spent fuel assemblies that can be stored on-site before" \
-           " reactor operation stalls.", \
-  }
-  int n_assem_spent;
+  #pragma cyclus var {"tooltip":"output commodity",\
+                      "doc":"commodity produced by this facility. Multiple commodity tracking is"\
+                      " currently not supported, one output commodity catches all input commodities.",\
+                      "uilabel":"Output Commodities",\
+                      "uitype":["oneormore","outcommodity"]}
+  std::vector<std::string> out_commods;
 
-   ///////// cycle params ///////////
-  #pragma cyclus var { \
-    "default": 18, \
-    "doc": "The duration of a full operational cycle (excluding refueling " \
-           "time) in time steps.", \
-    "uilabel": "Cycle Length", \
-    "units": "time steps", \
-  }
-  int cycle_time;
-  #pragma cyclus var { \
-    "default": 1, \
-    "doc": "The duration of a full refueling period - the minimum time between"\
-           " the end of a cycle and the start of the next cycle.", \
-    "uilabel": "Refueling Outage Duration", \
-    "units": "time steps", \
-  }
-  int refuel_time;
-  #pragma cyclus var { \
-    "default": 0, \
-    "doc": "Number of time steps since the start of the last cycle." \
-           " Only set this if you know what you are doing", \
-    "uilabel": "Time Since Start of Last Cycle", \
-    "units": "time steps", \
-  }
-  int cycle_step;
+  #pragma cyclus var {"default":"",\
+                      "tooltip":"input recipe",\
+                      "doc":"recipe accepted by this facility, if unspecified a dummy recipe is used",\
+                      "uilabel":"Input Recipe",\
+                      "uitype":"inrecipe"}
+  std::string in_recipe;
 
-  //////////// power params ////////////
-  #pragma cyclus var { \
-    "default": 0, \
-    "doc": "Amount of electrical power the facility produces when operating " \
-           "normally.", \
-    "uilabel": "Nominal Reactor Power", \
-    "uitype": "range", \
-    "range": [0.0, 2000.00],  \
-    "units": "MWe", \
-  }
-  double power_cap;
+  #pragma cyclus var {"default": 0,\
+                      "tooltip":"residence time (timesteps)",\
+                      "doc":"the minimum holding time for a received commodity (timesteps).",\
+                      "units":"time steps",\
+                      "uilabel":"Residence Time", \
+                      "uitype": "range", \
+                      "range": [0, 12000]}
+  int residence_time;
 
-  #pragma cyclus var { \
-    "default": "power", \
-    "uilabel": "Power Commodity Name", \
-    "doc": "The name of the 'power' commodity used in conjunction with a " \
-           "deployment curve.", \
-  }
-  std::string power_name;
+  #pragma cyclus var {"default": 1e299,\
+                     "tooltip":"throughput per timestep (kg)",\
+                     "doc":"the max amount that can be moved through the facility per timestep (kg)",\
+                     "uilabel":"Throughput",\
+                     "uitype": "range", \
+                     "range": [0.0, 1e299], \
+                     "units":"kg"}
+  double throughput;
 
-  /////////// preference changes ///////////
-  #pragma cyclus var { \
-    "default": [], \
-    "uilabel": "Time to Change Fresh Fuel Preference", \
-    "doc": "A time step on which to change the request preference for a " \
-           "particular fresh fuel type.", \
-  }
-  std::vector<int> pref_change_times;
-  #pragma cyclus var { \
-    "default": [], \
-    "doc": "The input commodity for a particular fuel preference change.  " \
-           "Same order as and direct correspondence to the specified " \
-           "preference change times.", \
-    "uilabel": "Commodity for Changed Fresh Fuel Preference", \
-    "uitype": ["oneormore", "incommodity"], \
-  }
-  std::vector<std::string> pref_change_commods;
-  #pragma cyclus var { \
-    "default": [], \
-    "uilabel": "Changed Fresh Fuel Preference",                        \
-    "doc": "The new/changed request preference for a particular fresh fuel." \
-           " Same order as and direct correspondence to the specified " \
-           "preference change times.", \
-  }
-  std::vector<double> pref_change_values;
+  #pragma cyclus var {"default": 1e299,\
+                      "tooltip":"maximum inventory size (kg)",\
+                      "doc":"the maximum amount of material that can be in all storage buffer stages",\
+                      "uilabel":"Maximum Inventory Size",\
+                      "uitype": "range", \
+                      "range": [0.0, 1e299], \
+                      "units":"kg"}
+  double max_inv_size; 
 
-  // Resource inventories - these must be defined AFTER/BELOW the member vars
-  // referenced (e.g. n_batch_fresh, assem_size, etc.).
-  #pragma cyclus var {"capacity": "n_assem_fresh * assem_size"}
-  cyclus::toolkit::ResBuf<cyclus::Material> fresh;
-  #pragma cyclus var {"capacity": "n_assem_core * assem_size"}
-  cyclus::toolkit::ResBuf<cyclus::Material> core;
-  #pragma cyclus var {"capacity": "n_assem_spent * assem_size"}
-  cyclus::toolkit::ResBuf<cyclus::Material> spent;
+  #pragma cyclus var {"default": False,\
+                      "tooltip":"Bool to determine how Storage handles batches",\
+                      "doc":"Determines if Storage will divide resource objects. Only controls material "\
+                            "handling within this facility, has no effect on DRE material handling. "\
+                            "If true, batches are handled as discrete quanta, neither split nor combined. "\
+                            "Otherwise, batches may be divided during processing. Default to false (continuous))",\
+                      "uilabel":"Batch Handling"}
+  bool discrete_handling;                    
+
+  #pragma cyclus var {"tooltip":"Incoming material buffer"}
+  cyclus::toolkit::ResBuf<cyclus::Material> inventory;
+
+  #pragma cyclus var {"tooltip":"Output material buffer"}
+  cyclus::toolkit::ResBuf<cyclus::Material> stocks;
+
+  #pragma cyclus var {"tooltip":"Buffer for material held for required residence_time"}
+  cyclus::toolkit::ResBuf<cyclus::Material> ready;
+
+  //// list of input times for materials entering the processing buffer
+  #pragma cyclus var{"default": [],\
+                      "internal": True}
+  std::list<int> entry_times;
+
+  #pragma cyclus var {"tooltip":"Buffer for material still waiting for required residence_time"}
+  cyclus::toolkit::ResBuf<cyclus::Material> processing;
+
+  //// A policy for requesting material
+  cyclus::toolkit::MatlBuyPolicy buy_policy;
+
+  //// A policy for sending material
+  cyclus::toolkit::MatlSellPolicy sell_policy;
 
 
-  // should be hidden in ui (internal only). True if fuel has already been
-  // discharged this cycle.
-  #pragma cyclus var {"default": 0, "doc": "This should NEVER be set manually",\
-                      "internal": True \
-  }
-  bool discharged;
-
-  // This variable should be hidden/unavailable in ui.  Maps resource object
-  // id's to the index for the incommod through which they were received.
-  #pragma cyclus var {"default": {}, "doc": "This should NEVER be set manually", \
-                      "internal": True \
-  }
-  std::map<int, int> res_indexes;
-
-  // populated lazily and no need to persist.
-  std::set<std::string> uniq_outcommods_;
+  friend class CorrmTest;
 };
 
-} // namespace recycle
+}  // namespace corrm
 
-#endif  // RECYCLE_SRC_CORRM_H_
+#endif  // CYCLUS_RECYCLE_CORRM_H
