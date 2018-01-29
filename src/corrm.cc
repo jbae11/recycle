@@ -47,11 +47,11 @@ void Corrm::InitFrom(cyclus::QueryableBackend* b) {
 // Upon entering 
 void Corrm::EnterNotify() {
   cyclus::Facility::EnterNotify();
-
   // set core size
   core.capacity(core_size);
+  fill_tank.capacity(fill_size);
   // set buy_policy to send things to inventory buffer
-  buy_policy.Init(this, &core, std::string("core"));
+  buy_policy.Init(this, &core, std::string("core"), core_size, core_size);
 
   // Flag for first entering (used for receiving fuel or fill)
   fresh = true;
@@ -104,6 +104,8 @@ void Corrm::EnterNotify() {
     ss << "out_commods has " << out_commods.size() << " values, expected 1.";
     throw cyclus::ValueError(ss.str());
   }
+
+  std::cout << prototype() << " has entered!";
 }
 
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -135,17 +137,30 @@ std::string Corrm::str() {
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 /// Before DRE, display current capacity of archetype
 void Corrm::Tick() {
+  std::cout << "\n TICK BEGINS------------------------------- \n";
   // Set available capacity for fill_tank
-  fill_tank.capacity(fill_size - fill_tank.quantity());
+  std::cout << "\n fill_tank size" << fill_size;
+  std::cout << "\n fill_tank quantity" << fill_tank.quantity();
+  std::cout << "\n fill_tank capacity" << fill_tank.capacity();
+  std::cout << "\n fill_tank space" << fill_tank.space();
+  std::cout << "\n core space" << core.space();
+  std::cout << "\n TICK END---------------------------------\n";
 }
 
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 /// After DRE, process inventory (inventory-> processing, processing->ready, ready->stocks)
 void Corrm::Tock() {
-
+  std::cout << "\n TOCK BEGINS-----------------------------\n";
   // if first tock, changes buy_policy so that it now accepts fill not fuel 
   if (fresh && core.quantity() == core_size){
     fresh = false;
+    // set preference of fuel to zero
+    cyclus::CompMap v;
+    cyclus::Composition::Ptr comp = cyclus::Composition::CreateFromAtom(v);
+    for (int i = 0; i != in_commods.size(); ++i) {
+     buy_policy.Set(in_commods[i], comp, 1e-10);
+    }
+    std::cout << "\n Not fresh no mo and core is full \n";
     buy_policy.Stop();
     buy_policy.Init(this, &fill_tank, std::string("fill_tank"));
 
@@ -153,7 +168,7 @@ void Corrm::Tock() {
     cyclus::CompMap fill_v;
     cyclus::Composition::Ptr fill_comp = cyclus::Composition::CreateFromAtom(fill_v);
     if (fill_recipe != "") {
-    fill_comp = context()->GetRecipe(fill_recipe);
+      fill_comp = context()->GetRecipe(fill_recipe);
     }
 
     // add all to buy_policy
@@ -163,9 +178,15 @@ void Corrm::Tock() {
     buy_policy.Start();
   }
   
+  std::cout << "\n core quantity : " << core.quantity();
   BeginProcessing_();  // place core to rep_tank
+  std::cout << "\ndone core to rep_tank\n";
+  std::cout << "\n core quantity : " << core.quantity();
+  std::cout << "\n rep_tank quantity : " << rep_tank.quantity() << "\n";
   ProcessMat_();  // place rep_tank to waste
-
+  std::cout << "\ndone rep_tank to waste \n";
+  std::cout << "\n rep_tank quantity : " << rep_tank.quantity() << "\n";
+  std::cout << "\n TOCK END-----------------------------\n";
 }
 
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -189,10 +210,13 @@ void Corrm::BeginProcessing_() {
   while (core.count() > 0) {
     try {
       rep_tank.Push(core.Pop());
+      LOG(cyclus::LEV_INFO5, "ComCnv") << prototype() << "is pushing from core to rep_tank at time "
+                                       << context()->time(); 
     } catch (cyclus::Error& e) {
     e.msg(Agent::InformErrorMsg(e.msg()));
     throw e;
   }
+
   }
 }
 
@@ -207,6 +231,8 @@ void Corrm::ProcessMat_() {
   while(rep_tank.count() > 0){
     try{
         waste.Push(rep_tank.Pop());
+        LOG(cyclus::LEV_INFO5, "ComCnv") << prototype() << "is pushing from rep_tank to waste buffer at time "
+                                       << context()->time(); 
     } catch (cyclus::Error& e) {
     e.msg(Agent::InformErrorMsg(e.msg()));
     throw e;

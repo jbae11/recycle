@@ -5,6 +5,7 @@
     <duration>10</duration>
     <startmonth>1</startmonth>
     <startyear>2000</startyear>
+    <decay>lazy</decay>
   </control>
 
   <archetypes>
@@ -21,7 +22,18 @@
       <Source>
         <outcommod>natl_u</outcommod>
         <outrecipe>natl_u</outrecipe>
-        <throughput>1000</throughput>
+        <throughput>9999999</throughput>
+      </Source>
+    </config>
+  </facility>
+
+  <facility>
+    <name>fill_source</name>
+    <config>
+      <Source>
+        <outcommod>fill</outcommod>
+        <outrecipe>fill</outrecipe>
+        <throughput>1</throughput>
       </Source>
     </config>
   </facility>
@@ -33,11 +45,14 @@
         <in_commods>
             <val>natl_u</val>
         </in_commods>
+        <fill_commods>
+            <val>fill</val>
+        </fill_commods>
+        <fill_size>1000</fill_size>
+        <core_size>100</core_size>
         <out_commods>
             <val>waste</val>
         </out_commods>
-        <residence_time>1</residence_time>
-        <throughput>1000</throughput>
       </Corrm>
     </config>
   </facility>
@@ -49,7 +64,7 @@
         <in_commods>
           <val>waste</val>
         </in_commods>
-        <capacity>10000</capacity>
+        <capacity>1000000</capacity>
       </Sink>
     </config>
   </facility>
@@ -62,6 +77,10 @@
       <initialfacilitylist>
         <entry>
           <prototype>Source</prototype>
+          <number>1</number>
+        </entry>
+        <entry>
+          <prototype>fill_source</prototype>
           <number>1</number>
         </entry>
         <entry>
@@ -111,5 +130,25 @@
       <comp>100</comp>
     </nuclide>
   </recipe>
+
+  <recipe>
+    <name>n</name>
+    <basis>atom</basis>
+    <nuclide>
+      <id>902320000</id>
+      <comp>100</comp>
+    </nuclide>
+  </recipe>
+
+
+  <recipe>
+    <name>fill</name>
+    <basis>atom</basis>
+    <nuclide>
+      <id>902320000</id>
+      <comp>100</comp>
+    </nuclide>
+  </recipe>
+
 
 </simulation>
