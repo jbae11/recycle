@@ -98,6 +98,7 @@ class Corrm
   /// The handleTick function specific to the Storage.
   virtual void Tock();
 
+
  protected:
   ///   @brief adds a material into the incoming commodity inventory
   ///   @param mat the material to add to the incoming inventory.
@@ -109,20 +110,8 @@ class Corrm
 
   /// @brief Move as many ready resources as allowable into stocks
   /// @param cap current throughput capacity 
-  void ProcessMat_(double cap);
+  void ProcessMat_();
 
-  /// @brief move ready resources from processing to ready at a certain time
-  /// @param time the time of interest
-  void ReadyMatl_(int time);
-
-    /* --- Storage Members --- */
-
-  /// @brief current maximum amount that can be added to processing
-  inline double current_capacity() const { 
-    return (max_inv_size - processing.quantity() - stocks.quantity()); }
-
-  /// @brief returns the time key for ready materials
-  int ready_time(){ return context()->time() - residence_time; }
 
   /* --- Module Members --- */
 
@@ -132,6 +121,12 @@ class Corrm
                       "uitype":["oneormore","incommodity"]}
   std::vector<std::string> in_commods;
 
+  #pragma cyclus var {"tooltip":"fill commodity",\
+                      "doc":"fill commodities accepted by this facility",\
+                      "uilabel":"Fill Commodities",\
+                      "uitype":["oneormore","incommodity"]}
+  std::vector<std::string> fill_commods;
+
   #pragma cyclus var {"default": [],\
                       "doc":"preferences for each of the given commodities, in the same order."\
                       "Defauts to 1 if unspecified",\
@@ -139,6 +134,14 @@ class Corrm
                       "range": [None, [1e-299, 1e299]], \
                       "uitype":["oneormore", "range"]}
   std::vector<double> in_commod_prefs;
+
+  #pragma cyclus var {"default": [],\
+                      "doc":"preferences for each of the given fill commodities, in the same order."\
+                      "Defauts to 1 if unspecified",\
+                      "uilabel":"Fill Commodity Preferences", \
+                      "range": [None, [1e-299, 1e299]], \
+                      "uitype":["oneormore", "range"]}
+  std::vector<double> fill_commod_prefs;
 
   #pragma cyclus var {"tooltip":"output commodity",\
                       "doc":"commodity produced by this facility. Multiple commodity tracking is"\
@@ -153,6 +156,13 @@ class Corrm
                       "uilabel":"Input Recipe",\
                       "uitype":"inrecipe"}
   std::string in_recipe;
+
+  #pragma cyclus var {"default":"",\
+                      "tooltip":"fill recipe",\
+                      "doc":"fill recipe accepted by this facility, if unspecified a dummy recipe is used",\
+                      "uilabel":"Fill Recipe",\
+                      "uitype":"inrecipe"}
+  std::string fill_recipe;
 
   #pragma cyclus var {"default": 0,\
                       "tooltip":"residence time (timesteps)",\
@@ -181,31 +191,48 @@ class Corrm
                       "units":"kg"}
   double max_inv_size; 
 
-  #pragma cyclus var {"default": False,\
-                      "tooltip":"Bool to determine how Storage handles batches",\
-                      "doc":"Determines if Storage will divide resource objects. Only controls material "\
-                            "handling within this facility, has no effect on DRE material handling. "\
-                            "If true, batches are handled as discrete quanta, neither split nor combined. "\
-                            "Otherwise, batches may be divided during processing. Default to false (continuous))",\
-                      "uilabel":"Batch Handling"}
-  bool discrete_handling;                    
 
+  #pragma cyclus var {"default": 1e299,\
+                      "tooltip":"Core Size (kg)",\
+                      "doc":"the maximum amount of material that can be in core",\
+                      "uilabel":"Maximum Core Size",\
+                      "uitype": "range", \
+                      "range": [0.0, 1e299], \
+                      "units":"kg"}
+  double core_size;
+
+  #pragma cyclus var {"default": 1e299,\
+                      "tooltip":"Fill Buffer Size (kg)",\
+                      "doc":"the maximum amount of fill materials that can be stored",\
+                      "uilabel":"Maximum Fill Size",\
+                      "uitype": "range", \
+                      "range": [0.0, 1e299], \
+                      "units":"kg"}
+  double fill_size;
+
+  #pragma cyclus var {"default": 1, "doc": "Always starts fresh, flag for fuel and fill"}
+  bool fresh;
+
+  ///  ResBuf for various stages
   #pragma cyclus var {"tooltip":"Incoming material buffer"}
-  cyclus::toolkit::ResBuf<cyclus::Material> inventory;
+  cyclus::toolkit::ResBuf<cyclus::Material> core;
 
   #pragma cyclus var {"tooltip":"Output material buffer"}
-  cyclus::toolkit::ResBuf<cyclus::Material> stocks;
+  cyclus::toolkit::ResBuf<cyclus::Material> waste;
 
-  #pragma cyclus var {"tooltip":"Buffer for material held for required residence_time"}
-  cyclus::toolkit::ResBuf<cyclus::Material> ready;
+  #pragma cyclus var {"tooltip":"Protactinium decay tank"}
+  cyclus::toolkit::ResBuf<cyclus::Material> pa_tank;
 
+  #pragma cyclus var {"tooltip":"Fill material stockpile buffer"}
+  cyclus::toolkit::ResBuf<cyclus::Material> fill_tank;
+
+  #pragma cyclus var {"tooltip":"Reprocessing buffer"}
+  cyclus::toolkit::ResBuf<cyclus::Material> rep_tank;
   //// list of input times for materials entering the processing buffer
   #pragma cyclus var{"default": [],\
                       "internal": True}
   std::list<int> entry_times;
 
-  #pragma cyclus var {"tooltip":"Buffer for material still waiting for required residence_time"}
-  cyclus::toolkit::ResBuf<cyclus::Material> processing;
 
   //// A policy for requesting material
   cyclus::toolkit::MatlBuyPolicy buy_policy;

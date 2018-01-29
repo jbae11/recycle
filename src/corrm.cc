@@ -44,9 +44,17 @@ void Corrm::InitFrom(cyclus::QueryableBackend* b) {
 }
 
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Upon entering 
 void Corrm::EnterNotify() {
   cyclus::Facility::EnterNotify();
-  buy_policy.Init(this, &inventory, std::string("inventory"));
+
+  // set core size
+  core.capacity(core_size);
+  // set buy_policy to send things to inventory buffer
+  buy_policy.Init(this, &core, std::string("core"));
+
+  // Flag for first entering (used for receiving fuel or fill)
+  fresh = true;
 
   // dummy comp, use in_recipe if provided
   cyclus::CompMap v;
@@ -55,6 +63,8 @@ void Corrm::EnterNotify() {
     comp = context()->GetRecipe(in_recipe);
   }
 
+
+  // Check in-commod_prefs size and set default if not specified
   if (in_commod_prefs.size() == 0) {
     for (int i = 0; i < in_commods.size(); ++i) {
       in_commod_prefs.push_back(cyclus::kDefaultPref);
@@ -66,13 +76,27 @@ void Corrm::EnterNotify() {
     throw cyclus::ValueError(ss.str());
   }
 
+  // Check fill_commod_prefs size and set default if not specified
+  if (fill_commod_prefs.size() == 0) {
+    for (int i = 0; i < fill_commods.size(); ++i) {
+      fill_commod_prefs.push_back(cyclus::kDefaultPref);
+    }
+  } else if (fill_commod_prefs.size() != fill_commods.size()) {
+    std::stringstream ss;
+    ss << "fill_commod_prefs has " << fill_commod_prefs.size()
+       << " values, expected " << fill_commods.size();
+    throw cyclus::ValueError(ss.str());
+  }
+
+  // set buy_policy for incommod with preference
   for (int i = 0; i != in_commods.size(); ++i) {
     buy_policy.Set(in_commods[i], comp, in_commod_prefs[i]);
   }
   buy_policy.Start();
 
+  // set sell_policy for out_commod (from waste buff)
   if (out_commods.size() == 1) {
-    sell_policy.Init(this, &stocks, std::string("stocks"))
+    sell_policy.Init(this, &waste, std::string("waste"))
         .Set(out_commods.front())
         .Start();
   } else {
@@ -109,118 +133,88 @@ std::string Corrm::str() {
 }
 
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+/// Before DRE, display current capacity of archetype
 void Corrm::Tick() {
-  // Set available capacity for Buy Policy
-  inventory.capacity(current_capacity());
-
-  LOG(cyclus::LEV_INFO3, "ComCnv") << prototype() << " is ticking {";
-
-  if (current_capacity() > cyclus::eps_rsrc()) {
-    LOG(cyclus::LEV_INFO4, "ComCnv")
-        << " has capacity for " << current_capacity() << " kg of material.";
-  }
-  LOG(cyclus::LEV_INFO3, "ComCnv") << "}";
+  // Set available capacity for fill_tank
+  fill_tank.capacity(fill_size - fill_tank.quantity());
 }
 
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+/// After DRE, process inventory (inventory-> processing, processing->ready, ready->stocks)
 void Corrm::Tock() {
-  LOG(cyclus::LEV_INFO3, "ComCnv") << prototype() << " is tocking {";
 
-  BeginProcessing_();  // place unprocessed inventory into processing
+  // if first tock, changes buy_policy so that it now accepts fill not fuel 
+  if (fresh && core.quantity() == core_size){
+    fresh = false;
+    buy_policy.Stop();
+    buy_policy.Init(this, &fill_tank, std::string("fill_tank"));
 
-  if (ready_time() >= 0 || residence_time == 0 && !inventory.empty()) {
-    ReadyMatl_(ready_time());  // place processing into ready
+    // dummy comp for fill, use fill_recipe if provided
+    cyclus::CompMap fill_v;
+    cyclus::Composition::Ptr fill_comp = cyclus::Composition::CreateFromAtom(fill_v);
+    if (fill_recipe != "") {
+    fill_comp = context()->GetRecipe(fill_recipe);
+    }
+
+    // add all to buy_policy
+    for (int i = 0; i != fill_commods.size(); ++i){
+        buy_policy.Set(fill_commods[i], fill_comp, fill_commod_prefs[i]);
+    }
+    buy_policy.Start();
   }
+  
+  BeginProcessing_();  // place core to rep_tank
+  ProcessMat_();  // place rep_tank to waste
 
-  ProcessMat_(throughput);  // place ready into stocks
-
-  LOG(cyclus::LEV_INFO3, "ComCnv") << "}";
 }
 
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+/// Adds material to inventory buffer
 void Corrm::AddMat_(cyclus::Material::Ptr mat) {
   LOG(cyclus::LEV_INFO5, "ComCnv") << prototype() << " is initially holding "
-                                   << inventory.quantity() << " total.";
+                                   << core.quantity() << " total.";
 
   try {
-    inventory.Push(mat);
+    core.Push(mat);
   } catch (cyclus::Error& e) {
     e.msg(Agent::InformErrorMsg(e.msg()));
     throw e;
   }
 
-  LOG(cyclus::LEV_INFO5, "ComCnv")
-      << prototype() << " added " << mat->quantity()
-      << " of material to its inventory, which is holding "
-      << inventory.quantity() << " total.";
 }
 
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+/// Moves all material from core to rep_tank.
 void Corrm::BeginProcessing_() {
-  while (inventory.count() > 0) {
+  while (core.count() > 0) {
     try {
-      processing.Push(inventory.Pop());
-      entry_times.push_back(context()->time());
-
-      LOG(cyclus::LEV_DEBUG2, "ComCnv")
-          << "   " << prototype()
-          << " added resources to processing at t= " << context()->time();
+      rep_tank.Push(core.Pop());
     } catch (cyclus::Error& e) {
-      e.msg(Agent::InformErrorMsg(e.msg()));
-      throw e;
-    }
+    e.msg(Agent::InformErrorMsg(e.msg()));
+    throw e;
+  }
   }
 }
 
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void Corrm::ProcessMat_(double cap) {
+/// Moves material from rep_tank to waste buffer.
+void Corrm::ProcessMat_() {
   using cyclus::Material;
   using cyclus::ResCast;
   using cyclus::toolkit::ResBuf;
   using cyclus::toolkit::Manifest;
 
-  if (!ready.empty()) {
-    try {
-      double max_pop = std::min(cap, ready.quantity());
-
-      if (discrete_handling) {
-        if (max_pop == ready.quantity()) {
-          stocks.Push(ready.PopN(ready.count()));
-        } else {
-          double cap_pop = ready.Peek()->quantity();
-          while (cap_pop <= max_pop && !ready.empty()) {
-            stocks.Push(ready.Pop());
-            cap_pop += ready.empty() ? 0 : ready.Peek()->quantity();
-          }
-        }
-      } else {
-        stocks.Push(ready.Pop(max_pop, cyclus::eps_rsrc()));
-      }
-
-      LOG(cyclus::LEV_INFO1, "ComCnv") << "Corrm " << prototype()
-                                       << " moved resources"
-                                       << " from ready to stocks"
-                                       << " at t= " << context()->time();
+  while(rep_tank.count() > 0){
+    try{
+        waste.Push(rep_tank.Pop());
     } catch (cyclus::Error& e) {
-      e.msg(Agent::InformErrorMsg(e.msg()));
-      throw e;
-    }
+    e.msg(Agent::InformErrorMsg(e.msg()));
+    throw e;
+    } 
   }
 }
 
-//- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void Corrm::ReadyMatl_(int time) {
-  using cyclus::toolkit::ResBuf;
 
-  int to_ready = 0;
-
-  while (!entry_times.empty() && entry_times.front() <= time) {
-    entry_times.pop_front();
-    ++to_ready;
-  }
-
-  ready.Push(processing.PopN(to_ready));
-}
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 extern "C" cyclus::Agent* ConstructCorrm(cyclus::Context* ctx) {
