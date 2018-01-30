@@ -15,6 +15,7 @@ class CorrmTest : public ::testing::Test {
  protected:
   cyclus::TestContext tc_;
   Corrm* src_facility_;
+
 };
 } // namespace corrm
 #endif // CORRM_TESTS_H_

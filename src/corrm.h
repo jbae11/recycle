@@ -112,6 +112,9 @@ class Corrm
   /// @param cap current throughput capacity 
   void ProcessMat_();
 
+  /// Record buff transactions
+  void Record_buff(std::string sender, std::string receiver, double quantity);
+
 
   /* --- Module Members --- */
 

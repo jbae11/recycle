@@ -50,8 +50,14 @@ void Corrm::EnterNotify() {
   // set core size
   core.capacity(core_size);
   fill_tank.capacity(fill_size);
+  std::cout << "\nwaste capacity: " << waste.capacity();
+  std::cout << "\n pa tank capacity: " << pa_tank.capacity();
+  std::cout << "\n fill tank capacity: " << fill_tank.capacity();
+  std::cout << "\n core capacity: " << core.capacity();
+  std::cout << "\n rep tank capacity: " << rep_tank.capacity(); 
+
   // set buy_policy to send things to inventory buffer
-  buy_policy.Init(this, &core, std::string("core"), core_size, core_size);
+  buy_policy.Init(this, &core, std::string("core"), core_size, 1e-6);
 
   // Flag for first entering (used for receiving fuel or fill)
   fresh = true;
@@ -162,7 +168,7 @@ void Corrm::Tock() {
     }
     std::cout << "\n Not fresh no mo and core is full \n";
     buy_policy.Stop();
-    buy_policy.Init(this, &fill_tank, std::string("fill_tank"));
+    buy_policy.Init(this, &fill_tank, std::string("fill_tank"), fill_size, fill_size);
 
     // dummy comp for fill, use fill_recipe if provided
     cyclus::CompMap fill_v;
@@ -194,7 +200,6 @@ void Corrm::Tock() {
 void Corrm::AddMat_(cyclus::Material::Ptr mat) {
   LOG(cyclus::LEV_INFO5, "ComCnv") << prototype() << " is initially holding "
                                    << core.quantity() << " total.";
-
   try {
     core.Push(mat);
   } catch (cyclus::Error& e) {
@@ -209,6 +214,8 @@ void Corrm::AddMat_(cyclus::Material::Ptr mat) {
 void Corrm::BeginProcessing_() {
   while (core.count() > 0) {
     try {
+      double qty = core.quantity();
+      Record_buff("core", "rep_tank", qty);
       rep_tank.Push(core.Pop());
       LOG(cyclus::LEV_INFO5, "ComCnv") << prototype() << "is pushing from core to rep_tank at time "
                                        << context()->time(); 
@@ -230,7 +237,9 @@ void Corrm::ProcessMat_() {
 
   while(rep_tank.count() > 0){
     try{
+        double qty = rep_tank.quantity();
         waste.Push(rep_tank.Pop());
+        Record_buff("rep_tank", "waste_buffer", qty);
         LOG(cyclus::LEV_INFO5, "ComCnv") << prototype() << "is pushing from rep_tank to waste buffer at time "
                                        << context()->time(); 
     } catch (cyclus::Error& e) {
@@ -241,6 +250,16 @@ void Corrm::ProcessMat_() {
 }
 
 
+void Corrm::Record_buff(std::string sender, std::string receiver, double quantity){
+  context()
+      ->NewDatum("CorrmBuffRecord")
+      ->AddVal("AgentId", id())
+      ->AddVal("Time", context()->time())
+      ->AddVal("Sender", sender)
+      ->AddVal("Receiver", receiver)
+      ->AddVal("Quantity", quantity)
+      ->Record();
+}
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 extern "C" cyclus::Agent* ConstructCorrm(cyclus::Context* ctx) {
