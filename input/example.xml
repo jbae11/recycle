@@ -33,7 +33,7 @@
       <Source>
         <outcommod>fill</outcommod>
         <outrecipe>fill</outrecipe>
-        <throughput>1</throughput>
+        <throughput>100000</throughput>
       </Source>
     </config>
   </facility>
@@ -51,7 +51,7 @@
         <fill_size>1000</fill_size>
         <core_size>100</core_size>
         <out_commods>
-            <val>waste</val>
+            <val>trash</val>
         </out_commods>
       </Corrm>
     </config>
@@ -62,7 +62,7 @@
     <config>
       <Sink>
         <in_commods>
-          <val>waste</val>
+          <val>trash</val>
         </in_commods>
         <capacity>1000000</capacity>
       </Sink>
