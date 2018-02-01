@@ -156,9 +156,10 @@ void Corrm::Tick() {
   // if core is full,
   // transmute, send to rep_tank 
   if (core.quantity() == core_size){
-  Deplete(3);
+  Deplete();
   std::cout << "\n Deplete!! \n";
 
+  //Separate();
   std::cout << "\n core quantity : " << core.quantity();
   BeginProcessing_();  // place core to rep_tank
   std::cout << "\ndone core to rep_tank\n";
@@ -173,10 +174,11 @@ void Corrm::Tick() {
 }
 
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-/// After DRE, process inventory (inventory-> processing, processing->ready, ready->stocks)
+
 void Corrm::Tock() {
   std::cout << "\n TOCK BEGINS-----------------------------\n";
-  // if first tock, changes buy_policy so that it now accepts fill not fuel 
+
+  // if the core is full for the first time, changes buy_policy so that it now accepts fill not fuel 
   if (fresh && core.quantity() == core_size){
     fresh = false;
     // set preference of fuel to negative - meaning we won't take fuel no more.
@@ -237,7 +239,7 @@ void Corrm::BeginProcessing_() {
 }
 
 
-void Corrm::Deplete(double dt) {
+void Corrm::Deplete() {
   cyclus::Material::Ptr dep_core = core.Pop(core.quantity());
   core.Push(dep_core);
 
@@ -251,6 +253,21 @@ void Corrm::Deplete(double dt) {
   cyclus::Composition::Ptr c1 = cyclus::Composition::CreateFromMass(m);
   dep_core->Transmute(c1);
 }
+
+// Stream and StreamSet type definition for ease
+typedef std::pair<double, std::map<int, double> > Stream;
+typedef std::map<std::string, Stream> StreamSet;
+
+void Corrm::Separate(){
+  cyclus::Material::Ptr rep_stream = core.Pop(rep_tank.quantity());
+  rep_tank.Push(rep_stream);
+
+  cyclus::CompMap cm = rep_stream->comp()->mass();
+  cyclus::compmath::Normalize(&cm, rep_stream->quantity());
+
+
+}
+
 
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 /// Moves material from rep_tank to waste buffer.

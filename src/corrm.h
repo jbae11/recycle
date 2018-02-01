@@ -84,9 +84,10 @@ class Corrm
   void ProcessMat_();
 
   /// @brief depletes the core with Reduced-Order-Model of SERPENT
-  /// @param dt the time period depletion and reprocessing takes place (continuous grid)
-  void Deplete(double dt);
+  void Deplete();
 
+  /// @brief Separates elements to different streams
+  void Separate();
   /// Record buff transactions
   void Record_buff(std::string sender, std::string receiver, double quantity);
 
