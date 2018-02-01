@@ -151,6 +151,25 @@ void Corrm::Tick() {
   std::cout << "\n fill_tank space" << fill_tank.space();
   std::cout << "\n core space" << core.space();
   std::cout << "\n TICK END---------------------------------\n";
+
+
+  // if core is full,
+  // transmute, send to rep_tank 
+  if (core.quantity() == core_size){
+  Deplete(3);
+  std::cout << "\n Deplete!! \n";
+
+  std::cout << "\n core quantity : " << core.quantity();
+  BeginProcessing_();  // place core to rep_tank
+  std::cout << "\ndone core to rep_tank\n";
+  std::cout << "\n core quantity : " << core.quantity();
+  std::cout << "\n rep_tank quantity : " << rep_tank.quantity() << "\n";
+  ProcessMat_();  // place rep_tank to waste
+  std::cout << "\ndone rep_tank to waste \n";
+  std::cout << "\n rep_tank quantity : " << rep_tank.quantity() << "\n";
+  std::cout << "\n TOCK END-----------------------------\n";
+
+  }
 }
 
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -183,15 +202,6 @@ void Corrm::Tock() {
     buy_policy.Start();
   }
   
-  std::cout << "\n core quantity : " << core.quantity();
-  BeginProcessing_();  // place core to rep_tank
-  std::cout << "\ndone core to rep_tank\n";
-  std::cout << "\n core quantity : " << core.quantity();
-  std::cout << "\n rep_tank quantity : " << rep_tank.quantity() << "\n";
-  ProcessMat_();  // place rep_tank to waste
-  std::cout << "\ndone rep_tank to waste \n";
-  std::cout << "\n rep_tank quantity : " << rep_tank.quantity() << "\n";
-  std::cout << "\n TOCK END-----------------------------\n";
 }
 
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -224,6 +234,22 @@ void Corrm::BeginProcessing_() {
   }
 
   }
+}
+
+
+void Corrm::Deplete(double dt) {
+  cyclus::Material::Ptr dep_core = core.Pop(core.quantity());
+  core.Push(dep_core);
+
+  // test composition. This should be done in the ROM
+  // U238 (90%), Pa233(5%), Xe135(5%) to test reprocessing
+  cyclus::CompMap m;
+  m[922380000] = 90;
+  m[912330000] = 5;
+  m[541350000] = 5;
+
+  cyclus::Composition::Ptr c1 = cyclus::Composition::CreateFromMass(m);
+  dep_core->Transmute(c1);
 }
 
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

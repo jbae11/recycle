@@ -15,54 +15,25 @@ class Corrm;
 
 namespace corrm {
 /// @class Corrm
-///
-/// This Facility is intended to hold materials for a user specified
-/// amount of time in order to model a storage facility with a certain
-/// residence time or holdup time.
-/// The Storage class inherits from the Facility class and is
-/// dynamically loaded by the Agent class when requested.
-///
-/// @section intro Introduction
-/// This Agent was initially developed to support the fco code-to-code 
-/// comparison.
-/// It's very similar to the "NullFacility" of years 
-/// past. Its purpose is to hold materials and release them only  
-/// after some period of delay time.
-///
-/// @section agentparams Agent Parameters
-/// in_commods is a vector of strings naming the commodities that this facility receives
-/// out_commods is a string naming the commodity that in_commod is stocks into
-/// residence_time is the minimum number of timesteps between receiving and offering
-/// in_recipe (optional) describes the incoming resource by recipe
-/// 
-/// @section optionalparams Optional Parameters
-/// max_inv_size is the maximum capacity of the inventory storage
-/// throughput is the maximum processing capacity per timestep
-///
-/// @section detailed Detailed Behavior
-/// 
-/// Tick:
-/// Nothing really happens on the tick. 
-///
-/// Tock:
-/// On the tock, any material that has been waiting for long enough (delay 
-/// time) is placed in the stocks buffer.
-///
-/// Any brand new inventory that was received in this timestep is placed into 
-/// the processing queue to begin waiting. 
-/// 
-/// Making Requests:
-/// This facility requests all of the in_commod that it can.
-///
-/// Receiving Resources:
-/// Anything of the in_commod that is received by this facility goes into the 
-/// inventory.
-///
-/// Making Offers:
-/// Any stocks material in the stocks buffer is offered to the market.
-///
-/// Sending Resources:
-/// Matched resources are sent immediately.
+/// The Continuous Online Reprocessing Reactor Module (CORRM)
+/// takes in initial fuel and runs the reactor by breeding fuel
+/// from fertile fill commodity. It stops accepting fuel commodity
+/// at the first Tock (only one DRE for accepting fuel) after the
+/// core is full. Then it accepts fill commodity (Th, U238) into
+/// the core. 
+
+/// The core undergoes a depletion calculation every dt, which is
+/// usually smaller than the CYCLUS time of 1 month. For every dt,
+/// the agent does the following:
+/// 1. Deplete the current core for dt
+/// 2. Send gases, Pa and etc(??) to rep_tank buffer.
+/// 3. From rep_tank buffer, send Xe, Kr and gases to waste buffer.
+/// 4. From rep_tank buffer, send Pa into Pa_tank buffer.
+/// 5. Fill the mass defect in core with fill_commodity.
+/// 6. Check for criticality, and make up criticality by receiving U233 from Pa_tank.
+
+
+
 class Corrm 
   : public cyclus::Facility,
     public cyclus::toolkit::CommodityProducer {
@@ -111,6 +82,10 @@ class Corrm
   /// @brief Move as many ready resources as allowable into stocks
   /// @param cap current throughput capacity 
   void ProcessMat_();
+
+  /// @brief depletes the core with Reduced-Order-Model of SERPENT
+  /// @param dt the time period depletion and reprocessing takes place (continuous grid)
+  void Deplete(double dt);
 
   /// Record buff transactions
   void Record_buff(std::string sender, std::string receiver, double quantity);
@@ -175,6 +150,15 @@ class Corrm
                       "uitype": "range", \
                       "range": [0, 12000]}
   int residence_time;
+
+  #pragma cyclus var {"default": 3,\
+                      "tooltip":"depletion and reprocessing time (days)",\
+                      "doc":"time period for reactor depletion and reprocessing.",\
+                      "units":"time steps",\
+                      "uilabel":"Deplete Time", \
+                      "uitype": "range", \
+                      "range": [0, 120000]}
+  int dt;
 
   #pragma cyclus var {"default": 1e299,\
                      "tooltip":"throughput per timestep (kg)",\
