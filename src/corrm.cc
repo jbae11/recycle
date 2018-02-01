@@ -160,14 +160,13 @@ void Corrm::Tock() {
   // if first tock, changes buy_policy so that it now accepts fill not fuel 
   if (fresh && core.quantity() == core_size){
     fresh = false;
-    // set preference of fuel to zero
+    // set preference of fuel to negative - meaning we won't take fuel no more.
     cyclus::CompMap v;
     cyclus::Composition::Ptr comp = cyclus::Composition::CreateFromAtom(v);
     for (int i = 0; i != in_commods.size(); ++i) {
-     buy_policy.Set(in_commods[i], comp, 1e-10);
+     buy_policy.Set(in_commods[i], comp, -1);
     }
     std::cout << "\n Not fresh no mo and core is full \n";
-    buy_policy.Stop();
     buy_policy.Init(this, &fill_tank, std::string("fill_tank"), fill_size, fill_size);
 
     // dummy comp for fill, use fill_recipe if provided
