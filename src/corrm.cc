@@ -44,10 +44,6 @@ void Corrm::InitFrom(cyclus::QueryableBackend* b) {
 
 
 
-typedef std::pair<double, std::map<int, double> > Stream;
-typedef std::map<std::string, Stream> StreamSet;
-
-
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Upon entering 
 void Corrm::EnterNotify() {
@@ -173,22 +169,14 @@ void Corrm::Tick() {
   Deplete();
   std::cout << "\n Deplete!! \n";
 
-  //Separate();
   std::cout << "\n core quantity : " << core.quantity();
   core_to_rep();  // place core to rep_tank
   std::cout << "\ndone core to rep_tank\n";
   std::cout << "\n core quantity : " << core.quantity();
   std::cout << "\n rep_tank quantity : " << rep_tank.quantity() << "\n";
-  
   std::cout << "\n fill_tank quantity : " << fill_tank.quantity() << "\n";
   refill_core();
-
-
-
-  rep_to_waste();  // place rep_tank to waste
-  std::cout << "\ndone rep_tank to waste \n";
-  std::cout << "\n rep_tank quantity : " << rep_tank.quantity() << "\n";
-
+  Separate();
   std::cout << "\n TICK END---------------------------------\n";
   }
 
@@ -283,37 +271,72 @@ typedef std::pair<double, std::map<int, double> > Stream;
 typedef std::map<std::string, Stream> StreamSet;
 
 void Corrm::Separate(){
-  cyclus::Material::Ptr rep_stream = core.Pop(rep_tank.quantity());
-  rep_tank.Push(rep_stream);
+  // Get material that is in rep tank
+  cyclus::Material::Ptr rep_stream = rep_tank.Pop(rep_tank.quantity());
+  double orig_qty = rep_stream->quantity();
 
-  cyclus::CompMap cm = rep_stream->comp()->mass();
-  cyclus::compmath::Normalize(&cm, rep_stream->quantity());
+  // Call SepMaterial to separate materials and set in map
+  std::map<std::string, cyclus::Material::Ptr> stagedsep;
+  stagedsep['pa'] = SepMaterial(pa_tank_stream, rep_stream);
+  stagedsep['waste'] = SepMaterial(waste_stream, rep_stream);
 
+  // Send the respective streams to their buffers
+  std::map<std::string, Material::Ptr>::iterator it;
+  for (it = stagedsep.begin(); it != stagedsep.end(); ++it){
+    std::string name = it->first;
+    Material::Ptr m = it->second;
+    if (m->quantity() > 0){
+        if (name == 'pa'){
+            pa_tank.Push(
+                rep_stream->ExtractComp(m->quantity(), m->comp()));
+        }
+        if else (name == 'waste'){
+            waste.Push(
+                rep_stream->ExtractComp(m->quantity(), m->comp()));
+        }
+    }
+  }
+
+  // If there is anything left after the reprocessing
+  // push the remaining material back into core.
+  if (rep_stream->quantity() > 0){
+    core.Push(rep_stream);
+  }
 
 }
 
+cyclus::Material::Ptr SepMaterial(std::map<int, double> effs,
+                                  cyclus::Material::Ptr mat) {
+  cyclus::CompMap cm = mat->comp()->mass();
+  cyclus::compmath::Normalize(&cm, mat->quantity());
+  double tot_qty = 0;
+  cyclus::CompMap sepcomp;
+
+  cyclus::CompMap::iterator it;
+  for (it = cm.begin(); it != cm.end(); ++it) {
+    int nuc = it->first;
+    int elem = (nuc / 10000000) * 10000000;
+    double eff = 0;
+    if (effs.count(nuc) > 0) {
+      eff = effs[nuc];
+    } else if (effs.count(elem) > 0) {
+      eff = effs[elem];
+    } else {
+      continue;
+    }
+
+    double qty = it->second;
+    double sepqty = qty * eff;
+    sepcomp[nuc] = sepqty;
+    tot_qty += sepqty;
+  }
+
+  cyclus::Composition::Ptr c = cyclus::Composition::CreateFromMass(sepcomp);
+  return cyclus::Material::CreateUntracked(tot_qty, c);
+};
 
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-/// Moves material from rep_tank to waste buffer.
-void Corrm::rep_to_waste() {
-  using cyclus::Material;
-  using cyclus::ResCast;
-  using cyclus::toolkit::ResBuf;
-  using cyclus::toolkit::Manifest;
 
-  while(rep_tank.count() > 0){
-    try{
-        double qty = rep_tank.quantity();
-        waste.Push(rep_tank.Pop());
-        Record_buff("rep_tank", "waste_buffer", qty);
-        LOG(cyclus::LEV_INFO5, "ComCnv") << prototype() << "is pushing from rep_tank to waste buffer at time "
-                                       << context()->time(); 
-    } catch (cyclus::Error& e) {
-    e.msg(Agent::InformErrorMsg(e.msg()));
-    throw e;
-    } 
-  }
-}
 
 
 void Corrm::Record_buff(std::string sender, std::string receiver, double quantity){

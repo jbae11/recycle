@@ -6,12 +6,7 @@
 #include <vector>
 
 #include "cyclus.h"
-
-// forward declaration
-namespace corrm {
-class Corrm;
-} // namespace corrm
-
+#include "recycle_version.h"
 
 namespace corrm {
 /// @class Corrm
@@ -32,6 +27,10 @@ namespace corrm {
 /// 5. Fill the mass defect in core with fill_commodity.
 /// 6. Check for criticality, and make up criticality by receiving U233 from Pa_tank.
 
+
+
+cyclus::Material::Ptr SepMaterial(std::map<int, double> effs,
+                                  cyclus::Material::Ptr mat);
 
 
 class Corrm 
