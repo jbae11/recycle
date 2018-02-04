@@ -42,6 +42,12 @@ void Corrm::InitFrom(cyclus::QueryableBackend* b) {
   cyclus::toolkit::CommodityProducer::Add(commod);
 }
 
+
+
+typedef std::pair<double, std::map<int, double> > Stream;
+typedef std::map<std::string, Stream> StreamSet;
+
+
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Upon entering 
 void Corrm::EnterNotify() {
@@ -54,6 +60,7 @@ void Corrm::EnterNotify() {
   // set depletion and reprocessing frequency per timestep
   dep_freq = floor(context()->dt() / dt);
   std::cout << "\n depletion frequency is " << dep_freq << "\n";
+
 
   std::cout << "\nwaste capacity: " << waste.capacity();
   std::cout << "\n pa tank capacity: " << pa_tank.capacity();

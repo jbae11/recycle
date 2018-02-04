@@ -205,6 +205,21 @@ class Corrm
                       "range": [0.0, 1.0]}
   double rep_frac;
 
+  #pragma cylcus var{"alias": ["comp", "eff"], \
+                     "uitype": ["nuclide", "double"], \
+                     "uilabel": "Nuclide and Efficiency for the pa_tank stream", \
+                     "doc": "This defines the element to be extracted for the pa_tank buffer " \
+                            " and its efficiency."}
+  std::map<int, double> pa_tank_stream;
+
+  #pragma cylcus var{"alias": ["comp", "eff"], \
+                     "uitype": ["nuclide", "double"], \
+                     "uilabel": "Nuclide and Efficiency for the waste stream", \
+                     "doc": "This defines the element to be extracted for the waste buffer " \
+                            " and its efficiency."}
+  std::map<int, double> waste_stream;
+  
+
   #pragma cyclus var {"default": 1, "doc": "Always starts fresh, flag for fuel and fill"}
   bool fresh;
 
