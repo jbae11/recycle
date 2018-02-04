@@ -48,14 +48,24 @@
         <fill_commods>
             <val>fill</val>
         </fill_commods>
-        <fill_size>1000</fill_size>
+        <rep_frac>0.1</rep_frac>
+        <fill_size>10000</fill_size>
         <core_size>100</core_size>
+        <pa_tank_stream>
+          <comp>Pa</comp>
+          <eff>0.99</eff>
+        </pa_tank_stream>
+        <waste_stream>
+          <comp>Xe</comp>
+          <eff>0.999</eff>
+        </waste_stream>
         <out_commods>
             <val>trash</val>
         </out_commods>
       </Corrm>
     </config>
   </facility>
+
 
   <facility>
     <name>Sink</name>
