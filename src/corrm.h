@@ -76,18 +76,21 @@ class Corrm
   ///   @throws if there is trouble with pushing to the inventory buffer.
   void AddMat_(cyclus::Material::Ptr mat);
 
-  /// @brief Move all unprocessed inventory to processing
-  void BeginProcessing_();
+  /// @brief Move fraction of material in core to reprocessing buffer
+  void core_to_rep();
 
-  /// @brief Move as many ready resources as allowable into stocks
-  /// @param cap current throughput capacity 
-  void ProcessMat_();
+  /// @brief Refill core after fraction of core is sent to reprocess
+  void refill_core();
+
+  /// @brief Send material from rep_tank to waste buffer
+  void rep_to_waste();
 
   /// @brief depletes the core with Reduced-Order-Model of SERPENT
   void Deplete();
 
   /// @brief Separates elements to different streams
   void Separate();
+
   /// Record buff transactions
   void Record_buff(std::string sender, std::string receiver, double quantity);
 
@@ -143,42 +146,28 @@ class Corrm
                       "uitype":"inrecipe"}
   std::string fill_recipe;
 
-  #pragma cyclus var {"default": 0,\
-                      "tooltip":"residence time (timesteps)",\
-                      "doc":"the minimum holding time for a received commodity (timesteps).",\
-                      "units":"time steps",\
-                      "uilabel":"Residence Time", \
-                      "uitype": "range", \
-                      "range": [0, 12000]}
-  int residence_time;
 
-  #pragma cyclus var {"default": 3,\
-                      "tooltip":"depletion and reprocessing time (days)",\
-                      "doc":"time period for reactor depletion and reprocessing.",\
+  // Time period of depletion and reprocessing (in secs)
+  // e.g. dt = 259200 -> reprocess every 3 days
+  #pragma cyclus var {"default": 259200,\
+                      "tooltip":"time period for reprocessing",\
+                      "doc":"Time period for reactor depletion and reprocessing.",\
                       "units":"time steps",\
-                      "uilabel":"Deplete Time", \
+                      "uilabel":"Deplete Frequency", \
                       "uitype": "range", \
-                      "range": [0, 120000]}
+                      "range": [0, 2629846]}
   int dt;
 
-  #pragma cyclus var {"default": 1e299,\
-                     "tooltip":"throughput per timestep (kg)",\
-                     "doc":"the max amount that can be moved through the facility per timestep (kg)",\
-                     "uilabel":"Throughput",\
-                     "uitype": "range", \
-                     "range": [0.0, 1e299], \
-                     "units":"kg"}
-  double throughput;
 
-  #pragma cyclus var {"default": 1e299,\
-                      "tooltip":"maximum inventory size (kg)",\
-                      "doc":"the maximum amount of material that can be in all storage buffer stages",\
-                      "uilabel":"Maximum Inventory Size",\
+  // frequency of depletion and reprocessing per timestep.
+  #pragma cyclus var {"default": 10,\
+                      "tooltip":"frequency for reprocessing and depletion",\
+                      "doc":"Frequency for reactor depletion and reprocessing.",\
+                      "units":"frequency",\
+                      "uilabel":"Deplete Frequency", \
                       "uitype": "range", \
-                      "range": [0.0, 1e299], \
-                      "units":"kg"}
-  double max_inv_size; 
-
+                      "range": [0, 12000]}
+  int dep_freq;
 
   #pragma cyclus var {"default": 1e299,\
                       "tooltip":"Core Size (kg)",\
@@ -198,6 +187,24 @@ class Corrm
                       "units":"kg"}
   double fill_size;
 
+  #pragma cyclus var {"default": 1e299,\
+                      "tooltip":"Fissile Buffer Size (kg)",\
+                      "doc":"the maximum amount of fissile materials that can be stored",\
+                      "uilabel":"Maximum Fissile Size",\
+                      "uitype": "range", \
+                      "range": [0.0, 1e299], \
+                      "units":"kg"}
+  double fissile_size;
+
+
+  #pragma cyclus var {"default": 0.1,\
+                      "tooltip":"Fraction of reprocessing per dt",\
+                      "doc":"The fraction of core that is reprocessed per dt",\
+                      "uilabel":"Fraction of reprocessing",\
+                      "uitype": "range", \
+                      "range": [0.0, 1.0]}
+  double rep_frac;
+
   #pragma cyclus var {"default": 1, "doc": "Always starts fresh, flag for fuel and fill"}
   bool fresh;
 
@@ -216,6 +223,10 @@ class Corrm
 
   #pragma cyclus var {"tooltip":"Reprocessing buffer"}
   cyclus::toolkit::ResBuf<cyclus::Material> rep_tank;
+
+  #pragma cyclus var {"tooltip":"Fissile buffer"}
+  cyclus::toolkit::ResBuf<cyclus::Material> fissile_tank;
+
   //// list of input times for materials entering the processing buffer
   #pragma cyclus var{"default": [],\
                       "internal": True}
