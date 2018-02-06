@@ -63,6 +63,32 @@ void Corrm::EnterNotify() {
   std::cout << "\n fill tank capacity: " << fill_tank.capacity();
   std::cout << "\n core capacity: " << core.capacity();
 
+
+
+  // Check in-commod_prefs size and set default if not specified
+  if (in_commod_prefs.size() == 0) {
+    for (int i = 0; i < in_commods.size(); ++i) {
+      in_commod_prefs.push_back(cyclus::kDefaultPref);
+    }
+  } else if (in_commod_prefs.size() != in_commods.size()) {
+    std::stringstream ss;
+    ss << "in_commod_prefs has " << in_commod_prefs.size()
+       << " values, expected " << in_commods.size();
+    throw cyclus::ValueError(ss.str());
+  }
+
+  // Check fill_commod_prefs size and set default if not specified
+  if (fill_commod_prefs.size() == 0) {
+    for (int i = 0; i < fill_commods.size(); ++i) {
+      fill_commod_prefs.push_back(cyclus::kDefaultPref);
+    }
+  } else if (fill_commod_prefs.size() != fill_commods.size()) {
+    std::stringstream ss;
+    ss << "fill_commod_prefs has " << fill_commod_prefs.size()
+       << " values, expected " << fill_commods.size();
+    throw cyclus::ValueError(ss.str());
+  }
+  
   // set buy_policy to send things to inventory buffers
   buy_policy.Init(this, &core, std::string("core"));
   buy_policy2.Init(this, &fill_tank, std::string("fill"));
@@ -116,29 +142,6 @@ void Corrm::EnterNotify() {
   }
 
 
-  // Check in-commod_prefs size and set default if not specified
-  if (in_commod_prefs.size() == 0) {
-    for (int i = 0; i < in_commods.size(); ++i) {
-      in_commod_prefs.push_back(cyclus::kDefaultPref);
-    }
-  } else if (in_commod_prefs.size() != in_commods.size()) {
-    std::stringstream ss;
-    ss << "in_commod_prefs has " << in_commod_prefs.size()
-       << " values, expected " << in_commods.size();
-    throw cyclus::ValueError(ss.str());
-  }
-
-  // Check fill_commod_prefs size and set default if not specified
-  if (fill_commod_prefs.size() == 0) {
-    for (int i = 0; i < fill_commods.size(); ++i) {
-      fill_commod_prefs.push_back(cyclus::kDefaultPref);
-    }
-  } else if (fill_commod_prefs.size() != fill_commods.size()) {
-    std::stringstream ss;
-    ss << "fill_commod_prefs has " << fill_commod_prefs.size()
-       << " values, expected " << fill_commods.size();
-    throw cyclus::ValueError(ss.str());
-  }
 
 
   std::cout << prototype() << " has entered!";
