@@ -68,6 +68,15 @@ class Corrm
   /// The handleTick function specific to the Storage.
   virtual void Tock();
 
+  // @brief CORRM request Materials of fill_commod. 
+  virtual std::set<cyclus::RequestPortfolio<cyclus::Material>::Ptr>
+      GetMatlRequests();
+
+  // @brief CORRM place accepted trade Materials in fill_tank
+  virtual void AcceptMatlTrades(
+      const std::vector< std::pair<cyclus::Trade<cyclus::Material>,
+      cyclus::Material::Ptr> >& responses);
+
 
  protected:
   ///   @brief adds a material into the incoming commodity inventory
@@ -204,15 +213,15 @@ class Corrm
                       "range": [0.0, 1.0]}
   double rep_frac;
 
-  #pragma cylcus var{"alias": ["comp", "eff"], \
-                     "uitype": ["nuclide", "double"], \
+  #pragma cylcus var{"alias": ["pa_tank_stream", "comp", "eff" ], \
+                     "uitype": ["oneormore", "nuclide", "double"], \
                      "uilabel": "Nuclide and Efficiency for the pa_tank stream", \
                      "doc": "This defines the element to be extracted for the pa_tank buffer " \
                             " and its efficiency."}
   std::map<int, double> pa_tank_stream;
 
-  #pragma cylcus var{"alias": ["comp", "eff"], \
-                     "uitype": ["nuclide", "double"], \
+  #pragma cylcus var{"alias": ["waste_stream", "comp", "eff"], \
+                     "uitype": ["oneormore", "nuclide", "double"], \
                      "uilabel": "Nuclide and Efficiency for the waste stream", \
                      "doc": "This defines the element to be extracted for the waste buffer " \
                             " and its efficiency."}
@@ -237,9 +246,6 @@ class Corrm
 
   #pragma cyclus var {"tooltip":"Reprocessing buffer"}
   cyclus::toolkit::ResBuf<cyclus::Material> rep_tank;
-
-  #pragma cyclus var {"tooltip":"Fissile buffer"}
-  cyclus::toolkit::ResBuf<cyclus::Material> fissile_tank;
 
   //// list of input times for materials entering the processing buffer
   #pragma cyclus var{"default": [],\

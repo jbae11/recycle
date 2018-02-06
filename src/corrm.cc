@@ -51,21 +51,20 @@ void Corrm::EnterNotify() {
   // set core size
   core.capacity(core_size);
   fill_tank.capacity(fill_size);
-  fissile_tank.capacity(fissile_size);
-
+  
   // set depletion and reprocessing frequency per timestep
   dep_freq = floor(context()->dt() / dt);
   std::cout << "\n depletion frequency is " << dep_freq << "\n";
 
 
-  std::cout << "\nwaste capacity: " << waste.capacity();
+  std::cout << "\nwaste buffer capacity: " << waste.capacity();
   std::cout << "\n pa tank capacity: " << pa_tank.capacity();
+  std::cout << "\n rep tank capacity: " << rep_tank.capacity(); 
   std::cout << "\n fill tank capacity: " << fill_tank.capacity();
   std::cout << "\n core capacity: " << core.capacity();
-  std::cout << "\n rep tank capacity: " << rep_tank.capacity(); 
 
-  // set buy_policy to send things to inventory buffer
-  buy_policy.Init(this, &core, std::string("core"), core_size, 1e-6);
+  // set buy_policy to send things to inventory buffers
+  buy_policy.Init(this, &core, std::string("core"));
 
   // Flag for first entering (used for receiving fuel or fill)
   fresh = true;
@@ -75,6 +74,23 @@ void Corrm::EnterNotify() {
   cyclus::Composition::Ptr comp = cyclus::Composition::CreateFromAtom(v);
   if (in_recipe != "") {
     comp = context()->GetRecipe(in_recipe);
+  }
+  // set buy_policy for incommod with preference
+  for (int i = 0; i != in_commods.size(); ++i) {
+    buy_policy.Set(in_commods[i], comp, in_commod_prefs[i]);
+  }
+  buy_policy.Start();
+
+
+  // set sell_policy for out_commod (from waste buff)
+  if (out_commods.size() == 1) {
+    sell_policy.Init(this, &waste, std::string("waste"))
+        .Set(out_commods.front())
+        .Start();
+  } else {
+    std::stringstream ss;
+    ss << "out_commods has " << out_commods.size() << " values, expected 1.";
+    throw cyclus::ValueError(ss.str());
   }
 
 
@@ -110,38 +126,6 @@ void Corrm::EnterNotify() {
     throw cyclus::ValueError(ss.str());
   }
 
-  // set buy_policy for incommod with preference
-  for (int i = 0; i != in_commods.size(); ++i) {
-    buy_policy.Set(in_commods[i], comp, in_commod_prefs[i]);
-  }
-  buy_policy.Start();
-
-  buy_policy.Init(this, &fill_tank, std::string("fill_tank"), fill_size, fill_size);
-
-  // dummy comp for fill, use fill_recipe if provided
-  cyclus::CompMap fill_v;
-  cyclus::Composition::Ptr fill_comp = cyclus::Composition::CreateFromAtom(fill_v);
-  if (fill_recipe != "") {
-    fill_comp = context()->GetRecipe(fill_recipe);
-  }  
-
-  // add all to buy_policy
-  for (int i = 0; i != fill_commods.size(); ++i){
-      buy_policy.Set(fill_commods[i], fill_comp, fill_commod_prefs[i]);
-  }
-  std::cout << "\n Now accepting fill";
-  buy_policy.Start();
-
-  // set sell_policy for out_commod (from waste buff)
-  if (out_commods.size() == 1) {
-    sell_policy.Init(this, &waste, std::string("waste"))
-        .Set(out_commods.front())
-        .Start();
-  } else {
-    std::stringstream ss;
-    ss << "out_commods has " << out_commods.size() << " values, expected 1.";
-    throw cyclus::ValueError(ss.str());
-  }
 
   std::cout << prototype() << " has entered!";
 }
@@ -150,6 +134,58 @@ void Corrm::EnterNotify() {
 std::string Corrm::str() {
 
 }
+
+// only requires GetMatlRequest and AcceptMatlTrades because sell_policy handles outgoing waste
+std::set<cyclus::RequestPortfolio<cyclus::Material>::Ptr> Corrm::GetMatlRequests(){
+  using cyclus::RequestPortfolio;
+  using cyclus::Material;
+  using cyclus::CapacityConstraint;
+
+
+  std::set<RequestPortfolio<Material>::Ptr> ports;
+  Material::Ptr m;
+
+  // dummy comp for fill, use fill_recipe if provided
+  cyclus::CompMap fill_v;
+  cyclus::Composition::Ptr fill_comp = cyclus::Composition::CreateFromAtom(fill_v);
+  if (fill_recipe != "") {
+    fill_comp = context()->GetRecipe(fill_recipe);
+  }  
+
+
+  // add fill_commod_pref to add request.
+  RequestPortfolio<Material>::Ptr port(new RequestPortfolio<Material>());
+  std::vector<cyclus::Request<Material>*> mreqs;
+  for (int i = 0; i != fill_commods.size(); ++i){
+    std::string commod = fill_commods[i];
+    double pref = fill_commod_prefs[i];
+    m = Material::CreateUntracked(fill_tank.space(), fill_comp);
+    cyclus::Request<Material>* r = port->AddRequest(m, this, commod, pref, true);
+    mreqs.push_back(r);
+  }
+
+
+  // not sure what this will do
+  cyclus::CapacityConstraint<Material> cc(fill_tank.space());
+  port->AddConstraint(cc);
+
+  return ports;
+}
+
+
+
+// Accept Materials and push to the fill_tank
+void Corrm::AcceptMatlTrades(
+    const std::vector< std::pair<cyclus::Trade<cyclus::Material>,
+                                 cyclus::Material::Ptr> >& responses) {
+  std::vector< std::pair<cyclus::Trade<cyclus::Material>,
+                         cyclus::Material::Ptr> >::const_iterator it;
+  for (it = responses.begin(); it != responses.end(); ++it) {
+    fill_tank.Push(it->second);
+  }
+}
+
+
 
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 /// Before DRE, display current capacity of archetype
@@ -275,25 +311,24 @@ void Corrm::Separate(){
   cyclus::Material::Ptr rep_stream = rep_tank.Pop(rep_tank.quantity());
   double orig_qty = rep_stream->quantity();
 
+  std::map<std::string, cyclus::toolkit::ResBuf<cyclus::Material> > streambufs;
+  std::string str_pa = "pa";
+  std::string str_waste = "waste";
+  streambufs[str_pa] = pa_tank;
+  streambufs[str_waste] = waste;
+
   // Call SepMaterial to separate materials and set in map
   std::map<std::string, cyclus::Material::Ptr> stagedsep;
-  stagedsep['pa'] = SepMaterial(pa_tank_stream, rep_stream);
-  stagedsep['waste'] = SepMaterial(waste_stream, rep_stream);
+  stagedsep[str_pa] = SepMaterial(pa_tank_stream, rep_stream);
+  stagedsep[str_waste] = SepMaterial(waste_stream, rep_stream);
 
   // Send the respective streams to their buffers
-  std::map<std::string, Material::Ptr>::iterator it;
+  std::map<std::string, cyclus::Material::Ptr>::iterator it;
   for (it = stagedsep.begin(); it != stagedsep.end(); ++it){
     std::string name = it->first;
-    Material::Ptr m = it->second;
+    cyclus::Material::Ptr m = it->second;
     if (m->quantity() > 0){
-        if (name == 'pa'){
-            pa_tank.Push(
-                rep_stream->ExtractComp(m->quantity(), m->comp()));
-        }
-        if else (name == 'waste'){
-            waste.Push(
-                rep_stream->ExtractComp(m->quantity(), m->comp()));
-        }
+        streambufs[name].Push(rep_stream->ExtractComp(m->quantity(), m->comp()));
     }
   }
 
