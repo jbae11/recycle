@@ -65,7 +65,7 @@ void Corrm::EnterNotify() {
 
   // set buy_policy to send things to inventory buffers
   buy_policy.Init(this, &core, std::string("core"));
-
+  buy_policy2.Init(this, &fill_tank, std::string("fill"));
   // Flag for first entering (used for receiving fuel or fill)
   fresh = true;
 
@@ -80,6 +80,20 @@ void Corrm::EnterNotify() {
     buy_policy.Set(in_commods[i], comp, in_commod_prefs[i]);
   }
   buy_policy.Start();
+
+  // dummy comp for fill, use fill_recipe if provided
+  cyclus::CompMap fill_v;
+  cyclus::Composition::Ptr fill_comp = cyclus::Composition::CreateFromAtom(fill_v);
+  if (fill_recipe != "") {
+    fill_comp = context()->GetRecipe(fill_recipe);
+  }  
+
+  // add all to buy_policy
+  for (int i = 0; i != fill_commods.size(); ++i){
+      buy_policy2.Set(fill_commods[i], fill_comp, fill_commod_prefs[i]);
+  }
+  std::cout << "\n Now accepting fill";
+  buy_policy2.Start();
 
 
   // set sell_policy for out_commod (from waste buff)
@@ -134,57 +148,6 @@ void Corrm::EnterNotify() {
 std::string Corrm::str() {
 
 }
-
-// only requires GetMatlRequest and AcceptMatlTrades because sell_policy handles outgoing waste
-std::set<cyclus::RequestPortfolio<cyclus::Material>::Ptr> Corrm::GetMatlRequests(){
-  using cyclus::RequestPortfolio;
-  using cyclus::Material;
-  using cyclus::CapacityConstraint;
-
-
-  std::set<RequestPortfolio<Material>::Ptr> ports;
-  Material::Ptr m;
-
-  // dummy comp for fill, use fill_recipe if provided
-  cyclus::CompMap fill_v;
-  cyclus::Composition::Ptr fill_comp = cyclus::Composition::CreateFromAtom(fill_v);
-  if (fill_recipe != "") {
-    fill_comp = context()->GetRecipe(fill_recipe);
-  }  
-
-
-  // add fill_commod_pref to add request.
-  RequestPortfolio<Material>::Ptr port(new RequestPortfolio<Material>());
-  std::vector<cyclus::Request<Material>*> mreqs;
-  for (int i = 0; i != fill_commods.size(); ++i){
-    std::string commod = fill_commods[i];
-    double pref = fill_commod_prefs[i];
-    m = Material::CreateUntracked(fill_tank.space(), fill_comp);
-    cyclus::Request<Material>* r = port->AddRequest(m, this, commod, pref, true);
-    mreqs.push_back(r);
-  }
-
-
-  // not sure what this will do
-  cyclus::CapacityConstraint<Material> cc(fill_tank.space());
-  port->AddConstraint(cc);
-
-  return ports;
-}
-
-
-
-// Accept Materials and push to the fill_tank
-void Corrm::AcceptMatlTrades(
-    const std::vector< std::pair<cyclus::Trade<cyclus::Material>,
-                                 cyclus::Material::Ptr> >& responses) {
-  std::vector< std::pair<cyclus::Trade<cyclus::Material>,
-                         cyclus::Material::Ptr> >::const_iterator it;
-  for (it = responses.begin(); it != responses.end(); ++it) {
-    fill_tank.Push(it->second);
-  }
-}
-
 
 
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
