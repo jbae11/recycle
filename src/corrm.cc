@@ -88,7 +88,7 @@ void Corrm::EnterNotify() {
        << " values, expected " << fill_commods.size();
     throw cyclus::ValueError(ss.str());
   }
-  
+
   // set buy_policy to send things to inventory buffers
   buy_policy.Init(this, &core, std::string("core"));
   buy_policy2.Init(this, &fill_tank, std::string("fill"));
@@ -118,15 +118,16 @@ void Corrm::EnterNotify() {
   for (int i = 0; i != fill_commods.size(); ++i){
       buy_policy2.Set(fill_commods[i], fill_comp, fill_commod_prefs[i]);
   }
-  std::cout << "\n Now accepting fill";
+  std::cout << "\n Now accepting fill\n";
   buy_policy2.Start();
 
 
   // set sell_policy for out_commod (from waste buff)
   if (out_commods.size() == 1) {
-    sell_policy.Init(this, &waste, std::string("waste"))
-        .Set(out_commods.front())
-        .Start();
+    // from waste buffer, call this policy waste
+    sell_policy.Init(this, &waste, std::string("waste"));
+    sell_policy.Set(out_commods.front());
+    sell_policy.Start();
   } else {
     std::stringstream ss;
     ss << "out_commods has " << out_commods.size() << " values, expected 1.";
@@ -177,13 +178,26 @@ void Corrm::Tick() {
   std::cout << "\n core quantity : " << core.quantity();
   std::cout << "\n rep_tank quantity : " << rep_tank.quantity() << "\n";
   std::cout << "\n fill_tank quantity : " << fill_tank.quantity() << "\n";
-  refill_core();
   Separate();
+  std::cout << "\n DONE SEPARATED\n";
+  std::cout << "\n core quantity : " << core.quantity();
+  std::cout << "\n rep_tank quantity : " << rep_tank.quantity() << "\n";
+  std::cout << "\n fill_tank quantity : " << fill_tank.quantity() << "\n";
+  std::cout << "\n pa_tank quantity: " <<pa_tank.quantity() << "\n";
+  refill_core();
+  std::cout << "\n DONE REFILLING\n";
+  std::cout << "\n core quantity : " << core.quantity();
+  std::cout << "\n rep_tank quantity : " << rep_tank.quantity() << "\n";
+  std::cout << "\n fill_tank quantity : " << fill_tank.quantity() << "\n";
+  std::cout << "\n pa_tank quantity: " <<pa_tank.quantity() << "\n";
+  std::cout << "\n WASTE QUANTITY: " << waste.quantity() << "\n";
   std::cout << "\n TICK END---------------------------------\n";
   }
 
   else {
     std::cout << "Core is not full, not producing power";
+    std::cout << "\n TICK END---------------------------------\n";
+  
   }
 }
 
@@ -204,7 +218,7 @@ void Corrm::Tock() {
     }
     std::cout << "\n Not accepting fuel anymore \n";
     
-    buy_policy.Start();
+    buy_policy.Stop();
   }
   
   std::cout << "\n TOCK END-----------------------------\n";
@@ -230,6 +244,8 @@ void Corrm::core_to_rep() {
   double qty = core.quantity() * rep_frac;
   Record_buff("core", "rep_tank", qty);
   rep_tank.Push(core.Pop(qty));
+
+  std::cout << "\n Core ->> " << qty << " ->> Reprocessing Stream\n";
   LOG(cyclus::LEV_INFO5, "ComCnv") << prototype() << "is pushing from core to rep_tank at time "
                                    << context()->time(); 
 }
@@ -239,17 +255,17 @@ void Corrm::refill_core() {
   // not critical add U233 from Pa_tank
   // still not critical get from fissile_tank
   // cannot make it critical, throw error
-  double qty = core.quantity() * rep_frac;
+  double qty = core.space();
   if (qty > fill_tank.quantity()){
     std::stringstream ss;
     ss << "Not enough material in fill tank :(";
     throw cyclus::ValueError(ss.str());
   }
+  std::cout << "\n Fill Tank ->> " << qty << " ->> Core\n";
   Record_buff("fill_tank", "core", qty);
   core.Push(fill_tank.Pop(qty));
   LOG(cyclus::LEV_INFO5, "ComCnv") << prototype() << "is pushing from fill_tank to core at time "
                                    << context()->time();
-
 }
 
 
@@ -260,9 +276,9 @@ void Corrm::Deplete() {
   // test composition. This should be done in the ROM
   // U238 (90%), Pa233(5%), Xe135(5%) to test reprocessing
   cyclus::CompMap m;
-  m[922380000] = 90;
-  m[912330000] = 5;
-  m[541350000] = 5;
+  m[922380000] = 50;
+  m[912330000] = 25;
+  m[541350000] = 25;
 
   cyclus::Composition::Ptr c1 = cyclus::Composition::CreateFromMass(m);
   dep_core->Transmute(c1);
@@ -277,30 +293,31 @@ void Corrm::Separate(){
   cyclus::Material::Ptr rep_stream = rep_tank.Pop(rep_tank.quantity());
   double orig_qty = rep_stream->quantity();
 
+
   std::map<std::string, cyclus::toolkit::ResBuf<cyclus::Material> > streambufs;
   std::string str_pa = "pa";
   std::string str_waste = "waste";
   streambufs[str_pa] = pa_tank;
   streambufs[str_waste] = waste;
 
-  // Call SepMaterial to separate materials and set in map
-  std::map<std::string, cyclus::Material::Ptr> stagedsep;
-  stagedsep[str_pa] = SepMaterial(pa_tank_stream, rep_stream);
-  stagedsep[str_waste] = SepMaterial(waste_stream, rep_stream);
+  // Call SepMaterial to separate materials
+  cyclus::Material::Ptr staged_pa;
+  cyclus::Material::Ptr staged_waste;
 
-  // Send the respective streams to their buffers
-  std::map<std::string, cyclus::Material::Ptr>::iterator it;
-  for (it = stagedsep.begin(); it != stagedsep.end(); ++it){
-    std::string name = it->first;
-    cyclus::Material::Ptr m = it->second;
-    if (m->quantity() > 0){
-        streambufs[name].Push(rep_stream->ExtractComp(m->quantity(), m->comp()));
-    }
-  }
+  staged_pa = SepMaterial(tankstream, rep_stream);
+  staged_waste = SepMaterial(wastestream, rep_stream);
+
+  pa_tank.Push(rep_stream->ExtractComp(staged_pa->quantity(), staged_pa->comp()));
+  std::cout <<"\n Reprocessing Stream ->>" << staged_pa->quantity() << "->> Pa Tank";
+
+
+  waste.Push(rep_stream->ExtractComp(staged_waste->quantity(), staged_waste->comp()));
+  std::cout <<"\n Reprocessing Stream ->>" << staged_waste->quantity() << "->> Waste Tank";
 
   // If there is anything left after the reprocessing
   // push the remaining material back into core.
   if (rep_stream->quantity() > 0){
+    std::cout << "\n Reprocessing Stream ->> " << rep_stream->quantity() << " ->> Core\n";
     core.Push(rep_stream);
   }
 
@@ -308,6 +325,9 @@ void Corrm::Separate(){
 
 cyclus::Material::Ptr SepMaterial(std::map<int, double> effs,
                                   cyclus::Material::Ptr mat) {
+  // takes in map of nuclide and efficiency
+  // separates the nuclides from the material
+
   cyclus::CompMap cm = mat->comp()->mass();
   cyclus::compmath::Normalize(&cm, mat->quantity());
   double tot_qty = 0;

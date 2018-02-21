@@ -2,7 +2,7 @@
 
 <simulation>
   <control>
-    <duration>10</duration>
+    <duration>3</duration>
     <startmonth>1</startmonth>
     <startyear>2000</startyear>
     <decay>lazy</decay>
@@ -42,6 +42,18 @@
     <name>Corrm</name>
     <config>
       <Corrm>
+        <waste_stream>
+        <item>
+          <comp>Xe-135</comp>
+          <eff>0.99</eff>
+        </item>
+        </waste_stream>
+        <tank_stream>
+        <item>
+          <comp>Pa-233</comp>
+          <eff>0.99</eff>
+        </item>
+        </tank_stream>
         <in_commods>
             <val>natl_u</val>
         </in_commods>
@@ -54,7 +66,6 @@
         <rep_frac>0.1</rep_frac>
         <fill_size>10000</fill_size>
         <core_size>100</core_size>
-
       </Corrm>
     </config>
   </facility>

@@ -204,22 +204,25 @@ class Corrm
                       "range": [0.0, 1.0]}
   double rep_frac;
 
-  #pragma cylcus var{"alias": ["pa_tank_stream", "comp", "eff" ], \
-                     "uitype": ["oneormore", "nuclide", "double"], \
-                     "uilabel": "Nuclide and Efficiency for the pa_tank stream", \
-                     "doc": "This defines the element to be extracted for the pa_tank buffer " \
-                            " and its efficiency."}
-  std::map<int, double> pa_tank_stream;
+  #pragma cyclus var { \
+    "alias": ["tank_stream", "comp", "eff"], \
+    "uitype": ["oneormore", "nuclide", "none"], \
+    "uilabel": "Nuclide and Efficiency for the pa tank stream", \
+    "doc": "This defines the element to be extracted for the pa tank buffer " \
+           " and its efficiency."}
+  std::map<int, double> tankstream;
 
-  #pragma cylcus var{"alias": ["waste_stream", "comp", "eff"], \
-                     "uitype": ["oneormore", "nuclide", "double"], \
-                     "uilabel": "Nuclide and Efficiency for the waste stream", \
-                     "doc": "This defines the element to be extracted for the waste buffer " \
-                            " and its efficiency."}
-  std::map<int, double> waste_stream;
-  
+  #pragma cyclus var { \
+    "alias": ["waste_stream", "comp", "eff"], \
+    "uitype": ["oneormore", "nuclide", "none"], \
+    "uilabel": "Nuclide and Efficiency for the waste stream", \
+    "doc": "This defines the element to be extracted for the waste buffer " \
+           " and its efficiency."}
+  std::map<int, double> wastestream;
 
-  #pragma cyclus var {"default": 1, "doc": "Always starts fresh, flag for fuel and fill"}
+
+  #pragma cyclus var {"default": 1, \
+                      "doc": "Always starts fresh, flag for fuel and fill"}
   bool fresh;
 
   ///  ResBuf for various stages
