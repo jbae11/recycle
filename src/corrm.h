@@ -70,103 +70,13 @@ class Corrm
 
 
  protected:
-  ///   @brief adds a material into the incoming commodity inventory
-  ///   @param mat the material to add to the incoming inventory.
-  ///   @throws if there is trouble with pushing to the inventory buffer.
-  void AddMat_(cyclus::Material::Ptr mat);
-
-  /// @brief Move fraction of material in core to reprocessing buffer
-  void core_to_rep();
-
-  /// @brief Refill core after fraction of core is sent to reprocess
-  void refill_core();
-
-  /// @brief Send material from rep_tank to waste buffer
-  void rep_to_waste();
-
-  /// @brief depletes the core with Reduced-Order-Model of SERPENT
-  void Deplete();
-
-  /// @brief Separates elements to different streams
-  void Separate();
-
-  /// Record buff transactions
-  void Record_buff(std::string sender, std::string receiver, double quantity);
 
 
   /* --- Module Members --- */
-
-  #pragma cyclus var {"tooltip":"input commodity",\
+  #pragma cyclus var {"tooltip": "infuel commodity",\
                       "doc":"commodities accepted by this facility",\
-                      "uilabel":"Input Commodities",\
-                      "uitype":["oneormore","incommodity"]}
-  std::vector<std::string> in_commods;
-
-  #pragma cyclus var {"tooltip":"fill commodity",\
-                      "doc":"fill commodities accepted by this facility",\
-                      "uilabel":"Fill Commodities",\
-                      "uitype":["oneormore","incommodity"]}
-  std::vector<std::string> fill_commods;
-
-  #pragma cyclus var {"default": [],\
-                      "doc":"preferences for each of the given commodities, in the same order."\
-                      "Defauts to 1 if unspecified",\
-                      "uilabel":"In Commody Preferences", \
-                      "range": [None, [1e-299, 1e299]], \
-                      "uitype":["oneormore", "range"]}
-  std::vector<double> in_commod_prefs;
-
-  #pragma cyclus var {"default": [],\
-                      "doc":"preferences for each of the given fill commodities, in the same order."\
-                      "Defauts to 1 if unspecified",\
-                      "uilabel":"Fill Commodity Preferences", \
-                      "range": [None, [1e-299, 1e299]], \
-                      "uitype":["oneormore", "range"]}
-  std::vector<double> fill_commod_prefs;
-
-  #pragma cyclus var {"tooltip":"output commodity",\
-                      "doc":"commodity produced by this facility. Multiple commodity tracking is"\
-                      " currently not supported, one output commodity catches all input commodities.",\
-                      "uilabel":"Output Commodities",\
-                      "uitype":["oneormore","outcommodity"]}
-  std::vector<std::string> out_commods;
-
-  #pragma cyclus var {"default":"",\
-                      "tooltip":"input recipe",\
-                      "doc":"recipe accepted by this facility, if unspecified a dummy recipe is used",\
-                      "uilabel":"Input Recipe",\
-                      "uitype":"inrecipe"}
-  std::string in_recipe;
-
-  #pragma cyclus var {"default":"",\
-                      "tooltip":"fill recipe",\
-                      "doc":"fill recipe accepted by this facility, if unspecified a dummy recipe is used",\
-                      "uilabel":"Fill Recipe",\
-                      "uitype":"inrecipe"}
-  std::string fill_recipe;
-
-
-  // Time period of depletion and reprocessing (in secs)
-  // e.g. dt = 259200 -> reprocess every 3 days
-  #pragma cyclus var {"default": 259200,\
-                      "tooltip":"time period for reprocessing",\
-                      "doc":"Time period for reactor depletion and reprocessing.",\
-                      "units":"time steps",\
-                      "uilabel":"Deplete Frequency", \
-                      "uitype": "range", \
-                      "range": [0, 2629846]}
-  int dt;
-
-
-  // frequency of depletion and reprocessing per timestep.
-  #pragma cyclus var {"default": 10,\
-                      "tooltip":"frequency for reprocessing and depletion",\
-                      "doc":"Frequency for reactor depletion and reprocessing.",\
-                      "units":"frequency",\
-                      "uilabel":"Deplete Frequency", \
-                      "uitype": "range", \
-                      "range": [0, 12000]}
-  int dep_freq;
+                      "uilabel":"Infuel Commodity"}
+  std::string init_fuel_commod;
 
   #pragma cyclus var {"default": 1e299,\
                       "tooltip":"Core Size (kg)",\
@@ -177,83 +87,122 @@ class Corrm
                       "units":"kg"}
   double core_size;
 
-  #pragma cyclus var {"default": 1e299,\
-                      "tooltip":"Fill Buffer Size (kg)",\
-                      "doc":"the maximum amount of fill materials that can be stored",\
-                      "uilabel":"Maximum Fill Size",\
+  #pragma cyclus var {"tooltip": "infuel commodity",\
+                      "doc":"commodities accepted by this facility",\
+                      "uilabel":"Infuel Commodity"}
+  std::string init_fuel_commod;
+
+  #pragma cyclus var {"uitype": "inrecipe", \
+                      "uilabel": "Init fuel recipe name", \
+                      "doc": "Init fuel commodity recipe name"}
+  std::string init_fuel_recipe;
+
+  #pragma cyclus var {"tooltip": "fill commodity",\
+                      "doc":"fill commodities accepted by this facility",\
+                      "uilabel":"Fill Commodity"}
+  std::string fill_commod;
+
+
+
+  #pragma cyclus var {"tooltip": "discharge fuel commodity",\
+                      "doc":"discharge fuel commodity accepted by this facility",\
+                      "uilabel":"Discharge Fuel Commodity"}
+  std::string discharge_fuel_commod;
+
+  #pragma cyclus var {"tooltip": "discharge fuel recipe",\
+                      "doc":"discharge fuel recipe offered by this facility",\
+                      "uilabel":"Discharge Fuel Recipe"}
+  std::string discharge_fuel_recipe;
+
+
+
+  #pragma cyclus var {"uitype": "inrecipe", \
+                      "uilabel": "Fill recipe name", \
+                      "doc": "Fill commodity recipe name"}
+  std::string fill_recipe;
+
+  #pragma cyclus var {"tooltip":"Fill per timestep (kg)",\
+                      "doc":"the amount of material that the reactor needs per timestep",\
+                      "uilabel":"Fill in per timestep",\
                       "uitype": "range", \
                       "range": [0.0, 1e299], \
                       "units":"kg"}
-  double fill_size;
+  double fill_per_timestep;
 
-  #pragma cyclus var {"default": 1e299,\
-                      "tooltip":"Fissile Buffer Size (kg)",\
-                      "doc":"the maximum amount of fissile materials that can be stored",\
-                      "uilabel":"Maximum Fissile Size",\
+
+
+  #pragma cyclus var { \
+    "default": 0, \
+    "doc": "Amount of electrical power the facility produces when operating " \
+           "normally.", \
+    "uilabel": "Nominal Reactor Power", \
+    "uitype": "range", \
+    "range": [0.0, 5000.00],  \
+    "units": "MWe", \
+  }
+  double power_cap;
+
+
+  #pragma cyclus var {"tooltip": "fissile output commodity",\
+                      "doc":"fissile commodities this facility outputs",\
+                      "uilabel":"fissile output"}
+  std::string fissile_out_commod;
+
+  #pragma cyclus var {"tooltip": "fissile output recipe",\
+                      "doc":"fissile recipe this facility outputs",\
+                      "uilabel":"fissile recipe"}
+  std::string fissile_out_recipe;
+  #pragma cyclus var {"tooltip":"Fissile out per timestep (kg)",\
+                      "doc":"the amount of fissile material reactor outputs per timestep",\
+                      "uilabel":"Fissile out per timestep",\
                       "uitype": "range", \
                       "range": [0.0, 1e299], \
                       "units":"kg"}
-  double fissile_size;
+  double fissile_output_per_timestep;
 
+  #pragma cyclus var {"tooltip": "waste output commodity",\
+                      "doc":"waste commodities this facility outputs",\
+                      "uilabel":"waste output"}
+  std::string waste_commod;
 
-  #pragma cyclus var {"default": 0.1,\
-                      "tooltip":"Fraction of reprocessing per dt",\
-                      "doc":"The fraction of core that is reprocessed per dt",\
-                      "uilabel":"Fraction of reprocessing",\
+  #pragma cyclus var {"tooltip": "waste output recipe",\
+                      "doc":"waste recipe this facility outputs",\
+                      "uilabel":"waste recipe"}
+  std::string waste_recipe;
+  #pragma cyclus var {"tooltip":"Waste out per timestep (kg)",\
+                      "doc":"the amount of waste material reactor outputs per timestep",\
+                      "uilabel":"Waste out per timestep",\
                       "uitype": "range", \
-                      "range": [0.0, 1.0]}
-  double rep_frac;
+                      "range": [0.0, 1e299], \
+                      "units":"kg"}
+  double waste_output_per_timestep;
 
-  #pragma cyclus var { \
-    "alias": ["tank_stream", "comp", "eff"], \
-    "uitype": ["oneormore", "nuclide", "none"], \
-    "uilabel": "Nuclide and Efficiency for the pa tank stream", \
-    "doc": "This defines the element to be extracted for the pa tank buffer " \
-           " and its efficiency."}
-  std::map<int, double> tankstream;
-
-  #pragma cyclus var { \
-    "alias": ["waste_stream", "comp", "eff"], \
-    "uitype": ["oneormore", "nuclide", "none"], \
-    "uilabel": "Nuclide and Efficiency for the waste stream", \
-    "doc": "This defines the element to be extracted for the waste buffer " \
-           " and its efficiency."}
-  std::map<int, double> wastestream;
-
-
-  #pragma cyclus var {"default": 1, \
-                      "doc": "Always starts fresh, flag for fuel and fill"}
-  bool fresh;
 
   ///  ResBuf for various stages
   #pragma cyclus var {"tooltip":"Incoming material buffer"}
-  cyclus::toolkit::ResBuf<cyclus::Material> core;
+  cyclus::toolkit::ResBuf<cyclus::Material> fertile_tank;
 
-  #pragma cyclus var {"tooltip":"Output material buffer"}
-  cyclus::toolkit::ResBuf<cyclus::Material> waste;
+  #pragma cyclus var {"tooltip":"Initial fuel buffer"}
+  cyclus::toolkit::ResBuf<cyclus::Material> init_fuel_tank;
 
-  #pragma cyclus var {"tooltip":"Protactinium decay tank"}
-  cyclus::toolkit::ResBuf<cyclus::Material> pa_tank;
 
-  #pragma cyclus var {"tooltip":"Fill material stockpile buffer"}
-  cyclus::toolkit::ResBuf<cyclus::Material> fill_tank;
+  #pragma cyclus var {"tooltip":"Waste buffer"}
+  cyclus::toolkit::ResBuf<cyclus::Material> waste_tank;
 
-  #pragma cyclus var {"tooltip":"Reprocessing buffer"}
-  cyclus::toolkit::ResBuf<cyclus::Material> rep_tank;
+  #pragma cyclus var {"tooltip":"Fissile tank"}
+  cyclus::toolkit::ResBuf<cyclus::Material> fissile_tank;
 
-  //// list of input times for materials entering the processing buffer
-  #pragma cyclus var{"default": [],\
-                      "internal": True}
-  std::list<int> entry_times;
+  #pragma cyclus var {"tooltip":"Discharge tank"}
+  cyclus::toolkit::ResBuf<cyclus::Material> discharge_tank;
 
 
   //// A policy for requesting material
   cyclus::toolkit::MatlBuyPolicy buy_policy;
-
-  cyclus::toolkit::MatlBuyPolicy buy_policy2;
-
+  cyclus::toolkit::MatlBuyPolicy buy_policy_fill;
   //// A policy for sending material
-  cyclus::toolkit::MatlSellPolicy sell_policy;
+  cyclus::toolkit::MatlSellPolicy sell_policy_waste;
+  cyclus::toolkit::MatlSellPolicy sell_policy_fissile;
+  cyclus::toolkit::MatlSellPolicy sell_policy_end;
 
 
   friend class CorrmTest;
