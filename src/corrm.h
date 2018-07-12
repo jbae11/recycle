@@ -87,11 +87,6 @@ class Corrm
                       "units":"kg"}
   double core_size;
 
-  #pragma cyclus var {"tooltip": "infuel commodity",\
-                      "doc":"commodities accepted by this facility",\
-                      "uilabel":"Infuel Commodity"}
-  std::string init_fuel_commod;
-
   #pragma cyclus var {"uitype": "inrecipe", \
                       "uilabel": "Init fuel recipe name", \
                       "doc": "Init fuel commodity recipe name"}
@@ -102,6 +97,19 @@ class Corrm
                       "uilabel":"Fill Commodity"}
   std::string fill_commod;
 
+
+  #pragma cyclus var {"uitype": "inrecipe", \
+                      "uilabel": "Fill recipe name", \
+                      "doc": "Fill commodity recipe name"}
+  std::string fill_recipe;
+  
+  #pragma cyclus var {"tooltip":"Fill per timestep (kg)",\
+                      "doc":"the amount of material that the reactor needs per timestep",\
+                      "uilabel":"Fill in per timestep",\
+                      "uitype": "range", \
+                      "range": [0.0, 1e299], \
+                      "units":"kg"}
+  double fill_per_timestep;
 
 
   #pragma cyclus var {"tooltip": "discharge fuel commodity",\
@@ -116,18 +124,6 @@ class Corrm
 
 
 
-  #pragma cyclus var {"uitype": "inrecipe", \
-                      "uilabel": "Fill recipe name", \
-                      "doc": "Fill commodity recipe name"}
-  std::string fill_recipe;
-
-  #pragma cyclus var {"tooltip":"Fill per timestep (kg)",\
-                      "doc":"the amount of material that the reactor needs per timestep",\
-                      "uilabel":"Fill in per timestep",\
-                      "uitype": "range", \
-                      "range": [0.0, 1e299], \
-                      "units":"kg"}
-  double fill_per_timestep;
 
 
 
@@ -177,6 +173,7 @@ class Corrm
                       "units":"kg"}
   double waste_output_per_timestep;
 
+  bool fresh;
 
   ///  ResBuf for various stages
   #pragma cyclus var {"tooltip":"Incoming material buffer"}

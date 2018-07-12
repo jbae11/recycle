@@ -1,0 +1,227 @@
+<!-- 1 Source Source, 1 Sink Sink -->
+
+<simulation>
+  <control>
+    <duration>1000</duration>
+    <startmonth>1</startmonth>
+    <startyear>2000</startyear>
+    <decay>lazy</decay>
+  </control>
+
+  <archetypes>
+    <spec><lib>cycamore</lib><name>Sink</name></spec>
+    <spec><lib>cycamore</lib><name>Source</name></spec>
+    <spec><lib>cycamore</lib><name>DeployInst</name></spec>
+    <spec><lib>recycle</lib><name>Corrm</name></spec>
+    <spec><lib>agents</lib><name>NullRegion</name></spec>
+    <spec><lib>agents</lib><name>NullInst</name></spec>
+  </archetypes>
+
+  <facility>
+    <name>Source</name>
+    <config>
+      <Source>
+        <outcommod>fuel</outcommod>
+        <outrecipe>fuel_recipe</outrecipe>
+        <throughput>9999999</throughput>
+      </Source>
+    </config>
+  </facility>
+
+  <facility>
+    <lifetime>10</lifetime>
+    <name>msr</name>
+    <config>
+      <Corrm>
+        <init_fuel_commod>fuel</init_fuel_commod>
+        <core_size>820</core_size>
+        <init_fuel_recipe>fuel_recipe</init_fuel_recipe>
+
+        <fill_commod>fill</fill_commod>
+        <fill_recipe>fill_recipe</fill_recipe>
+        <fill_per_timestep>10</fill_per_timestep>
+
+
+        <discharge_fuel_commod>output_fuel</discharge_fuel_commod>
+        <discharge_fuel_recipe>output_recipe</discharge_fuel_recipe>
+
+        <power_cap>1000</power_cap>
+
+        <fissile_out_commod>pu</fissile_out_commod>
+        <fissile_out_recipe>pu_recipe</fissile_out_recipe>
+        <fissile_output_per_timestep>10</fissile_output_per_timestep>
+
+        <waste_commod>waste</waste_commod>
+        <waste_recipe>waste_recipe</waste_recipe>
+        <waste_output_per_timestep>20</waste_output_per_timestep>
+      </Corrm>
+    </config>
+  </facility>
+
+
+  <facility>
+    <name>fill_source</name>
+    <config>
+      <Source>
+        <outcommod>fill</outcommod>
+        <outrecipe>fill_recipe</outrecipe>
+        <throughput>100000</throughput>
+      </Source>
+    </config>
+  </facility>
+
+
+  <facility>
+    <name>Sink</name>
+    <config>
+      <Sink>
+        <in_commods>
+          <val>waste</val>
+          <val>pu</val>
+          <val>output_fuel</val>
+        </in_commods>
+        <capacity>1000000</capacity>
+      </Sink>
+    </config>
+  </facility>
+
+   <region>
+    <name>us</name>
+    <config><NullRegion/></config>
+    <institution>
+      <name>oneinst</name>
+      <config>
+        <DeployInst>
+          <prototypes>
+            <val>msr</val>
+            <val>msr</val>
+            <val>msr</val>
+            <val>msr</val>
+            <val>msr</val>
+            <val>msr</val>
+          </prototypes>
+          <build_times>
+            <val>1</val>
+            <val>240</val>
+            <val>480</val>
+            <val>700</val>
+            <val>940</val>
+            <val>1180</val>
+          </build_times>
+          <n_build>
+            <val>1</val>
+            <val>1</val>
+            <val>1</val>
+            <val>1</val>
+            <val>1</val>
+            <val>1</val>
+          </n_build>
+          <!--
+          <n_build>
+            <val>122</val>
+            <val>122</val>
+            <val>122</val>
+            <val>122</val>
+            <val>122</val>
+            <val>122</val>
+          </n_build>
+      -->
+        </DeployInst>
+      </config>
+    </institution>
+  </region>
+
+
+  <region>
+    <name>SingleRegion</name>
+    <config><NullRegion/></config>
+    <institution>
+      <name>SingleInstitution</name>
+      <initialfacilitylist>
+        <entry>
+          <prototype>Source</prototype>
+          <number>1</number>
+        </entry>
+        <entry>
+          <prototype>fill_source</prototype>
+          <number>1</number>
+        </entry>
+        <entry>
+          <prototype>msr</prototype>
+          <number>1</number>
+        </entry>
+        <entry>
+          <prototype>Sink</prototype>
+          <number>1</number>
+        </entry>
+      </initialfacilitylist>
+      <config><NullInst/></config>
+    </institution>
+  </region>
+
+  <recipe>
+    <name>natl_u</name>
+    <basis>mass</basis>
+    <nuclide>
+      <id>922350000</id>
+      <comp>0.7</comp>
+    </nuclide>
+    <nuclide>
+      <id>922380000</id>
+      <comp>99.3</comp>
+    </nuclide>
+  </recipe>
+
+  <recipe>
+    <name>fuel_recipe</name>
+    <basis>mass</basis>
+    <nuclide>
+      <id>922350000</id>
+      <comp>4.5</comp>
+    </nuclide>
+    <nuclide>
+      <id>922380000</id>
+      <comp>95.5</comp>
+    </nuclide>
+  </recipe>
+
+    <recipe>
+    <name>fill_recipe</name>
+    <basis>mass</basis>
+    <nuclide>
+      <id>922380000</id>
+      <comp>100</comp>
+    </nuclide>
+  </recipe>
+
+  <recipe>
+    <name>pu_recipe</name>
+    <basis>atom</basis>
+    <nuclide>
+      <id>942390000</id>
+      <comp>100</comp>
+    </nuclide>
+  </recipe>
+
+  <recipe>
+    <name>waste_recipe</name>
+    <basis>atom</basis>
+    <nuclide>
+      <id>Cs137</id>
+      <comp>100</comp>
+    </nuclide>
+  </recipe>
+
+
+  <recipe>
+    <name>output_recipe</name>
+    <basis>atom</basis>
+    <nuclide>
+      <id>Am241</id>
+      <comp>100</comp>
+    </nuclide>
+  </recipe>
+
+
+
+</simulation>
