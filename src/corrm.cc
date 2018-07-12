@@ -107,12 +107,6 @@ void Corrm::Tick() {
   	fertile_tank.Pop();
   }
 
-  if (init_fuel_tank.quantity() == core_size){
-  cyclus::toolkit::RecordTimeSeries<cyclus::toolkit::POWER>(this, power_cap);
-  }
-  else {
-    std::cout << "Core is not full, not producing power: " << context()->time();  
-  }
 }
 
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -159,6 +153,14 @@ void Corrm::Tock() {
 	  buy_policy_fill.Set(fill_commod, fill_comp);
 	  buy_policy_fill.Start();
 	  first = false;
+  }
+
+  // generate power
+  if (init_fuel_tank.quantity() == core_size){
+  cyclus::toolkit::RecordTimeSeries<cyclus::toolkit::POWER>(this, power_cap);
+  }
+  else {
+    std::cout << "Core is not full, not producing power: " << context()->time();  
   }
 
 }
