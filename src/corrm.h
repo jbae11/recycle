@@ -73,10 +73,21 @@ class Corrm
 
 
   /* --- Module Members --- */
-  #pragma cyclus var {"tooltip": "infuel commodity",\
+  #pragma cyclus var {"uitype": ["oneormore", "incommodity"], \
+                      "tooltip": "infuel commodity",\
                       "doc":"commodities accepted by this facility",\
                       "uilabel":"Infuel Commodity"}
-  std::string init_fuel_commod;
+  std::vector<std::string> init_fuel_commod;
+
+  #pragma cyclus var { \
+    "default": [], \
+    "uilabel": "Fresh Fuel Preference List", \
+    "doc": "The preference for each type of fresh fuel requested corresponding"\
+           " to each input commodity (same order).  If no preferences are " \
+           "specified, 1.0 is used for all fuel " \
+           "requests (default).", \
+  }
+  std::vector<double> fuel_prefs;
 
   #pragma cyclus var {"default": 1e299,\
                       "tooltip":"Core Size (kg)",\

@@ -49,7 +49,7 @@ void Corrm::EnterNotify() {
   fertile_tank.capacity(fill_per_timestep);
 
   // set buy_policy to send things to inventory buffers
-  buy_policy.Init(this, &init_fuel_tank, std::string("init_fuel"));
+  buy_policy.Init(this, &init_fuel_tank, std::string("init_fuel"), core_size);
   
   // Flag for first entering (used for receiving fuel or fill)
   fresh = true;
@@ -60,7 +60,9 @@ void Corrm::EnterNotify() {
   comp = context() -> GetRecipe(init_fuel_recipe);
 
   // set buy_policy for incommod with preference
-  buy_policy.Set(init_fuel_commod, comp);
+  for (int i = 0; i != init_fuel_commod.size(); ++i){
+    buy_policy.Set(init_fuel_commod[i], comp, fuel_prefs[i]);
+  }
   buy_policy.Start();
 
 
@@ -87,6 +89,7 @@ void Corrm::Tick() {
   // if core is full,
   // transmute, send to rep_tank 
 
+  init_fuel_tank.capacity(core_size);
   // whewn it's its exittime,
   if (context()->time() == exit_time()){
   	// add end material to buffer
@@ -120,7 +123,9 @@ void Corrm::Tock() {
     // set preference of fuel to negative - meaning we won't take fuel no more.
     cyclus::CompMap v;
     cyclus::Composition::Ptr comp = cyclus::Composition::CreateFromAtom(v);
-    buy_policy.Set(init_fuel_commod, comp, -1);    
+    for (int i = 0; i != init_fuel_commod.size(); ++i){
+    buy_policy.Set(init_fuel_commod[i], comp, fuel_prefs[-1]);
+    }
     buy_policy.Stop();
   }
 
