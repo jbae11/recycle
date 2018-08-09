@@ -12,6 +12,16 @@ import cyclus.typesystem as ts
 
 
 class saltproc_reactor(Facility):
+    """
+    This reactor imports an HDF5 file from a saltproc run (or a converted SCALE output).
+
+    It imports the following data:
+        surplus fissile output composition and isotopics in time
+        waste output isotopics in time
+        fertile input isotopics in time
+        core isotopics in time
+        blanket isotopics(if applicable)
+    """
     init_fuel_commod = ts.String(
         doc="The commodity name for initial loading fuel",
         tooltip="Init Fuel",
@@ -75,12 +85,9 @@ class saltproc_reactor(Facility):
         self.driver_db = self.f['driver composition after reproc']
         self.blanket_db = self.f['blanket composition after reproc']
         self.isos = self.f['iso names']
+        self.saltproc_timestep = self.f['siminfo_timestep'][0] * 24 * 3600 * 10
         self.num_isotopes = len(self.isos)
         self.prev_indx = 0
-        # default in saltproc is 3 days
-        # probably should have this in the database as well
-        ################################ SET AS 30 days
-        self.saltproc_timestep = 3 * 24 * 3600 * 10
         self.driver_mass = 1
         self.blanket_mass = 1
         self.driver_buf.capacity = self.driver_mass
@@ -187,14 +194,14 @@ class saltproc_reactor(Facility):
         fill_comp_dict = self.array_to_comp_dict(self.fill_comp)
 
         if bool(fill_comp_dict):
-            print('I WANT %f kg DEP U' %(self.qty))
+            print('I WANT %f kg Fill material' %(self.qty))
             self.demand_mat = ts.Material.create_untracked(self.qty, fill_comp_dict)
         if self.qty != 0.0:
             self.get_fill = True
 
 
     def get_material_bids(self, requests):
-        """ Gets material bids that want its `outcommod' an
+        """ Gets material bids that want its `outcommod' and
             returns bid portfolio
         """
         bids = []
