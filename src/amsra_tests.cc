@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
 
-#include "corrm_tests.h"
+#include "amsra_tests.h"
 
-namespace corrm {
+namespace amsra {
 
 
 

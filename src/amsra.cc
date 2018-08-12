@@ -1,48 +1,48 @@
-// corrm.cc
-// Implements the Corrm class
-#include "corrm.h"
+// amsra.cc
+// Implements the Amsra class
+#include "amsra.h"
 
-namespace corrm {
+namespace amsra {
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-Corrm::Corrm(cyclus::Context* ctx) : cyclus::Facility(ctx) {
+Amsra::Amsra(cyclus::Context* ctx) : cyclus::Facility(ctx) {
   cyclus::Warn<cyclus::EXPERIMENTAL_WARNING>(
-      "The Corrm Facility is experimental.");
+      "The AMSRA Facility is experimental.");
 };
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // pragmas
 
-#pragma cyclus def schema corrm::Corrm
+#pragma cyclus def schema amsra::Amsra
 
-#pragma cyclus def annotations corrm::Corrm
+#pragma cyclus def annotations amsra::Amsra
 
-#pragma cyclus def initinv corrm::Corrm
+#pragma cyclus def initinv amsra::Amsra
 
-#pragma cyclus def snapshotinv corrm::Corrm
+#pragma cyclus def snapshotinv amsr::Amsra
 
-#pragma cyclus def infiletodb corrm::Corrm
+#pragma cyclus def infiletodb amsra::Amsra
 
-#pragma cyclus def snapshot corrm::Corrm
+#pragma cyclus def snapshot amsra::Amsra
 
-#pragma cyclus def clone corrm::Corrm
+#pragma cyclus def clone amsra::Amsra
 
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void Corrm::InitFrom(Corrm* m) {
-#pragma cyclus impl initfromcopy corrm::Corrm
+void Amsra::InitFrom(Amsra* m) {
+#pragma cyclus impl initfromcopy amsra::Amsra
   cyclus::toolkit::CommodityProducer::Copy(m);
 }
 
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void Corrm::InitFrom(cyclus::QueryableBackend* b) {
-#pragma cyclus impl initfromdb corrm::Corrm
+void Amsra::InitFrom(cyclus::QueryableBackend* b) {
+#pragma cyclus impl initfromdb amsra::Amsra
 }
 
 
 
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Upon entering 
-void Corrm::EnterNotify() {
+void Amsra::EnterNotify() {
   cyclus::Facility::EnterNotify();
 
   init_fuel_tank.capacity(core_size);
@@ -77,14 +77,14 @@ void Corrm::EnterNotify() {
 }
 
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-std::string Corrm::str() {
+std::string Amsra::str() {
 
 }
 
 
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 /// Before DRE, display current capacity of archetype
-void Corrm::Tick() {
+void Amsra::Tick() {
   using cyclus::Material;
   // if core is full,
   // transmute, send to rep_tank 
@@ -114,7 +114,7 @@ void Corrm::Tick() {
 
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-void Corrm::Tock() {
+void Amsra::Tock() {
   using cyclus::Material;
 
   // if the core is full for the first time, changes buy_policy so that it now accepts fill not fuel 
@@ -172,8 +172,8 @@ void Corrm::Tock() {
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-extern "C" cyclus::Agent* ConstructCorrm(cyclus::Context* ctx) {
-  return new Corrm(ctx);
+extern "C" cyclus::Agent* ConstructAmsra(cyclus::Context* ctx) {
+  return new Amsra(ctx);
 }
 
-}  // namespace corrm
+}  // namespace amsra

@@ -1,22 +1,22 @@
-#ifndef CORRM_TESTS_H_
-#define CORRM_TESTS_H_
+#ifndef AMSRA_TESTS_H_
+#define AMSRA_TESTS_H_
 
 #include <gtest/gtest.h>
 
-#include "corrm.h"
+#include "amsra.h"
 
 #include "context.h"
 #include "facility_tests.h"
 #include "agent_tests.h"
 
-namespace corrm {
+namespace amsra{
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-class CorrmTest : public ::testing::Test {
+class AmsraTest : public ::testing::Test {
  protected:
   cyclus::TestContext tc_;
-  Corrm* src_facility_;
+  Amsra* src_facility_;
 
 };
-} // namespace corrm
-#endif // CORRM_TESTS_H_
+} // namespace amsra
+#endif // AMSRA_TESTS_H_
 

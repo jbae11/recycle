@@ -1,5 +1,5 @@
-#ifndef CYCLUS_RECYCLE_CORRM_H
-#define CYCLUS_RECYCLE_CORRM_H
+#ifndef CYCLUS_RECYCLE_AMSRA_H
+#define CYCLUS_RECYCLE_AMSRA_H
 
 #include <string>
 #include <list>
@@ -8,9 +8,9 @@
 #include "cyclus.h"
 #include "recycle_version.h"
 
-namespace corrm {
-/// @class Corrm
-/// The Continuous Online Reprocessing Reactor Module (CORRM)
+namespace amsra {
+/// @class amsra
+/// The Average Molten Salt Reactor Archetype (AMSRA)
 /// takes in initial fuel and runs the reactor by breeding fuel
 /// from fertile fill commodity. It stops accepting fuel commodity
 /// at the first Tock (only one DRE for accepting fuel) after the
@@ -33,25 +33,17 @@ cyclus::Material::Ptr SepMaterial(std::map<int, double> effs,
                                   cyclus::Material::Ptr mat);
 
 
-class Corrm 
+class Amsra 
   : public cyclus::Facility,
     public cyclus::toolkit::CommodityProducer {
  public:  
   /// @param ctx the cyclus context for access to simulation-wide parameters
-  Corrm(cyclus::Context* ctx);
+  Amsra(cyclus::Context* ctx);
   
   #pragma cyclus decl
 
-  #pragma cyclus note {"doc": "Storage is a simple facility which accepts any number of commodities " \
-                              "and holds them for a user specified amount of time. The commodities accepted "\
-                              "are chosen based on the specified preferences list. Once the desired amount of material "\
-                              "has entered the facility it is passed into a 'processing' buffer where it is held until "\
-                              "the residence time has passed. The material is then passed into a 'ready' buffer where it is "\
-                              "queued for removal. Currently, all input commodities are lumped into a single output commodity. "\
-                              "Storage also has the functionality to handle materials in discrete or continuous batches. Discrete "\
-                              "mode, which is the default, does not split or combine material batches. Continuous mode, however, "\
-                              "divides material batches if necessary in order to push materials through the facility as quickly "\
-                              "as possible."}
+  #pragma cyclus note {"doc": "Amsra models MSR behavior using average rates of "\
+                              "material flow"}
 
   /// A verbose printer for the Storage Facility
   virtual std::string str();
@@ -213,9 +205,9 @@ class Corrm
   cyclus::toolkit::MatlSellPolicy sell_policy_end;
 
 
-  friend class CorrmTest;
+  friend class AmsraTest;
 };
 
-}  // namespace corrm
+}  // namespace amsra
 
-#endif  // CYCLUS_RECYCLE_CORRM_H
+#endif  // CYCLUS_RECYCLE_AMSRA_H
