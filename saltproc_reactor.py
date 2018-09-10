@@ -79,8 +79,8 @@ class saltproc_reactor(Facility):
         self.fissile_db = self.cum_to_nocum(self.f['fissile tank composition'])
         self.driver_refill = self.cum_to_nocum(self.f['driver refill tank composition'])
         self.blanket_refill = self.cum_to_nocum(self.f['blanket refill tank composition'])
-        self.driver_db = self.cum_to_nocum(self.f['driver composition after reproc'])    
-        self.blanket_db = self.cum_to_nocum(self.f['blanket composition after reproc'])
+        self.driver_db = self.cutoff_nonzero(self.f['driver composition after reproc'])
+        self.blanket_db = self.cutoff_nonzero(self.f['blanket composition after reproc'])
 
         self.siminfo_timestep = int(self.f['siminfo_timestep'][()].decode('utf-8'))
         self.saltproc_timestep = self.siminfo_timestep * 24 * 3600
@@ -110,6 +110,9 @@ class saltproc_reactor(Facility):
         for i in range(1, self.max_nonzero_indx):
             new_array[i] = dataset[i] - dataset[i-1]
         return new_array
+    
+    def cutoff_nonzero(self, dataset):
+        return dataset[: self.max_nonzero_indx]
 
     def get_max_nonzero_indx(self):
         self.tot_timesteps = len(self.f['driver composition after reproc'])
@@ -150,6 +153,7 @@ class saltproc_reactor(Facility):
 
     def tock(self):
         # check if core is full;
+        print('=============')
         print('tock')
         if self.check_core_full():
             self.loaded = True
@@ -238,74 +242,73 @@ class saltproc_reactor(Facility):
         """ Gets material bids that want its `outcommod' and
             returns bid portfolio
         """
-        self.write('get material bids ' + str(self.context.time) + '\n')
+        print('get material bids')
         bids = []
         # waste commods
-        if self.waste_commod not in requests:
-            return
-        reqs = requests[self.waste_commod]
-        for req in reqs:
-            qty = min(req.target.quantity, self.waste_tank.quantity)
-            # returns if the inventory is empty
-            if self.waste_tank.empty():
-                return
-            # get the composition of the material next in line
-            next_in_line = self.waste_tank.peek()
-            mat = ts.Material.create_untracked(qty, next_in_line.comp())
-            bids.append({'request': req, 'offer': mat})
+        try:
+            reqs = requests[self.waste_commod]
+            for req in reqs:
+                qty = min(req.target.quantity, self.waste_tank.quantity)
+                # returns if the inventory is empty
+                if self.waste_tank.empty():
+                    break
+                # get the composition of the material next in line
+                next_in_line = self.waste_tank.peek()
+                mat = ts.Material.create_untracked(qty, next_in_line.comp())
+                bids.append({'request': req, 'offer': mat})
+        except KeyError:
+            print('No one is requesting ', self.waste_commod)
         
-        # fissile commods
-        if self.fissile_out_commod not in requests:
-            return
-        reqs = requests[self.fissile_out_commod]
-        for req in reqs:
-            qty = min(req.target.quantity, self.fissile_tank.quantity)
-            if self.fissile_tank.empty():
-                return
-            next_in_line =self.fissile_tank.peek()
-            mat = ts.Material.create_untracked(qty, next_in_line.comp())
-            bids.append({'request': req, 'offer':mat})
+        try:
+            reqs = requests[self.fissile_out_commod]
+            for req in reqs:
+                qty = min(req.target.quantity, self.fissile_tank.quantity)
+                if self.fissile_tank.empty():
+                    break
+                next_in_line =self.fissile_tank.peek()
+                mat = ts.Material.create_untracked(qty, next_in_line.comp())
+                bids.append({'request': req, 'offer':mat})
+        except KeyError:
+            print('No one is requesting ', self.fissile_out_commod)
 
         if self.context.time == self.exit_time:
             self.shutdown = True
-            reqs = requests[self.final_fuel_commod]
-            for req in reqs:
-                total_qty = self.driver_buf.quantity + self.blanket_buf.quantity
-                qty = min(req.target.quantity, total_qty)
-                if self.driver_buf.empty():
-                    return
-                driver = self.driver_buf.peek()
-                blanket = self.blanket_buf.peek()
-                driver.absorb(blanket)
-                bids.append({'request': req, 'offer': driver})                                
+            try:
+                reqs = requests[self.final_fuel_commod]
+                for req in reqs:
+                    total_qty = self.driver_buf.quantity + self.blanket_buf.quantity
+                    qty = min(req.target.quantity, total_qty)
+                    if self.driver_buf.empty():
+                        break
+                    driver = self.driver_buf.peek()
+                    blanket = self.blanket_buf.peek()
+                    driver.absorb(blanket)
+                    bids.append({'request': req, 'offer': driver})
+            except KeyError:
+                print('No one is requesting ', self.final_fuel_commod)
+                # postpone shutdown..?
+        if len(bids) == 0:
+            return
         port = {"bids": bids}
+        print('get material bids')
+        print(port)
         return port
     
-    def write(self, string):
-        with open('debug.txt', 'a+') as f:
-            f.write(string)
-
 
     def get_material_trades(self, trades):
         """ Give out waste_commod and fissile_out_commod from
             waste_tank and fissile_tank, respectively.
         """
-        self.write('get material trades ' + str(self.context.time) + '\n')
+        print('get material trades')
         responses = {}
-        print(trades)
-        for trade in trades:
-            print(trade.request.commodity)
-            print('\n')
         for trade in trades:
             commodity = trade.request.commodity
+            print(commodity)
             if commodity == self.waste_commod:
-                self.write('waste commod')
                 mat_list = self.waste_tank.pop_n(self.waste_tank.count)
             if commodity == self.fissile_out_commod:
-                self.write('fissile out commod')
                 mat_list = self.fissile_tank.pop_n(self.fissile_tank.count)
             if commodity == self.final_fuel_commod:
-                self.write('final fuel commod')
                 blank_comp = self.array_to_comp_dict(self.blanket_db[self.prev_indx, :])
                 driver_comp = self.array_to_comp_dict(self.driver_db[self.prev_indx, :])
                 blank = ts.Material.create(self, self.blanket_mass, blank_comp)
@@ -322,7 +325,7 @@ class saltproc_reactor(Facility):
 
     def get_material_requests(self):
         """ Ask for material fill_commod """
-        self.write('get material requests ' +str(self.context.time) + '\n')
+        print('get material requests')
         ports = []
         if self.shutdown:
             return {}
@@ -351,12 +354,15 @@ class saltproc_reactor(Facility):
             port = {'commodities': commods, 'constraints': self.qty}
             return port
         else:
-            return {}
-
+            print('dummy')
+            dummy_recipe = {'H1': 0}
+            dummy_mat = self.create_untracked(1, dummy_recipe)
+            commods = {'dummy': dummy_mat}
+            return commods
 
     def accept_material_trades(self, responses):
+        print('accept material trades')
         """ Get fill_commod and store it into fill_tank """
-        self.write('accept material trades ' +str(self.context.time) + '\n')
         for key, mat in responses.items():
             if key.request.commodity == self.init_fuel_commod and not self.loaded:
                 self.driver_buf.push(mat)
