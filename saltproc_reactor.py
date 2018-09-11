@@ -127,17 +127,24 @@ class saltproc_reactor(Facility):
         if not self.fresh:
             reactor_age_sec = self.context.dt * (self.context.time - self.start_time)
             timestep_at_hdf5 = int(reactor_age_sec / self.saltproc_timestep)
-            self.indx = min(timestep_at_hdf5, len(self.waste_db[:, 0])) + 1
+            if timestep_at_hdf5 < len(self.waste_db):
+                self.indx = timestep_at_hdf5
+            else:
+                self.indx = self.indx_tuple[1]
+                self.prev_indx = self.indx_tuple[0]
         else:
             self.indx = -1
         # if reactor is `on'
         if self.indx > 0:
+            print('INDX, PREV INDX', self.indx, self.prev_indx)
             # push waste from db to waste_tank
             self.get_waste()
             # push fissile from db to fissile_tank
             self.get_fissile()
             self.get_fill_demand()
-            self.prev_indx = self.indx
+            self.indx_tuple = (self.prev_indx, self.indx)
+            self.prev_indx = self.indx + 1
+
             
         for key, val in self.buf_dict.items():
             print('%s qty: %f' %(key, val.quantity))
@@ -162,7 +169,7 @@ class saltproc_reactor(Facility):
             if self.fresh:
                 self.start_time = self.context.time
                 self.fresh = False
-        else:
+        elif self.context.time != self.exit_time:
             print('DRIVER OR BLANKET IS NOT FULL IN TIME %s \n\n' %self.context.time)
             self.loaded = False
 
