@@ -346,19 +346,14 @@ class saltproc_reactor(Facility):
                     ports.append({'commodities': {self.init_fuel_commod: mat[key]},
                                   'constraints': qty[key]})
                 if 'blanket' in key:
-                    prots.append({'commodities': {self.fill_commod: mat[key]},
+                    ports.append({'commodities': {self.fill_commod: mat[key]},
                                   'constraints': qty[key]})
             return ports
-        elif self.get_fill:
+        elif self.get_fill and self.context.time != self.exit_time:
             commods = {self.fill_commod: self.demand_mat}
             port = {'commodities': commods, 'constraints': self.qty}
             return port
-        else:
-            print('dummy')
-            dummy_recipe = {'H1': 0}
-            dummy_mat = self.create_untracked(1, dummy_recipe)
-            commods = {'dummy': dummy_mat}
-            return commods
+        return []
 
     def accept_material_trades(self, responses):
         print('accept material trades')
