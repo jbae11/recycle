@@ -5,9 +5,11 @@ from collections import defaultdict
 import numpy as np
 import scipy as sp
 import h5py
+import sqlite3 as lite
 
 from cyclus.agents import Institution, Agent, Facility
 from cyclus import lib
+import cyclus.simstate as ss
 import cyclus.typesystem as ts
 
 
@@ -57,6 +59,11 @@ class saltproc_reactor(Facility):
         tooltip="Absolute path to the hdf5 file"
     )
 
+    power_cap = ts.Double(
+        doc="Power capacity of reactor",
+        tooltip="Power capacity of reactor"
+    )
+
     waste_tank = ts.ResBufMaterialInv()
     fissile_tank = ts.ResBufMaterialInv()
 
@@ -97,6 +104,16 @@ class saltproc_reactor(Facility):
         self.fresh = True
         self.loaded = False
         self.shutdown = False
+
+        # super hacky
+        self.cursor = lite.connect('cyclus.sqlite').cursor()
+        self.cursor.execute(
+            '''CREATE TABLE IF NOT EXISTS timeseriespower(
+            SimId blob PRIMARY KEY,
+            AgentId blob NOT NULL,
+            Time blob,
+            Value blob);''')
+
 
     def cum_to_nocum(self, dataset):
         """ Convert cumulative array to non-cumulative array
@@ -165,6 +182,7 @@ class saltproc_reactor(Facility):
         if self.check_core_full():
             self.loaded = True
             print('REACTOR IS LOADED')
+            self.record_power()
             # Produce power.. how?
             if self.fresh:
                 self.start_time = self.context.time
@@ -380,3 +398,19 @@ class saltproc_reactor(Facility):
                 iso = self.isos[i].decode('utf8')
                 dictionary[iso] = val
         return dictionary
+
+
+    def record_power(self):
+        print('power!')
+        exec_string = ''' INSERT OR IGNORE INTO timeseriespower(SimId,AgentId,Time,Value)
+                          VALUES(?,?,?,?);'''
+        values = (str(self.context.sim_id), self.id, self.context.time, self.power_cap)
+        print('exec sring and values set')
+        print(exec_string)
+        print(values)
+        try:
+            self.cursor.execute(exec_string, values)
+        except Exception as e:
+            print(e)
+            raise ValueError()
+        print('recorded!')
