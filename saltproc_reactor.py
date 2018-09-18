@@ -105,15 +105,6 @@ class saltproc_reactor(Facility):
         self.loaded = False
         self.shutdown = False
 
-        # super hacky
-        self.cursor = lite.connect('cyclus.sqlite').cursor()
-        self.cursor.execute(
-            '''CREATE TABLE IF NOT EXISTS timeseriespower(
-            SimId blob PRIMARY KEY,
-            AgentId blob NOT NULL,
-            Time blob,
-            Value blob);''')
-
 
     def cum_to_nocum(self, dataset):
         """ Convert cumulative array to non-cumulative array
@@ -182,8 +173,7 @@ class saltproc_reactor(Facility):
         if self.check_core_full():
             self.loaded = True
             print('REACTOR IS LOADED')
-            self.record_power()
-            # Produce power.. how?
+            # self.record_power()
             if self.fresh:
                 self.start_time = self.context.time
                 self.fresh = False
@@ -402,15 +392,7 @@ class saltproc_reactor(Facility):
 
     def record_power(self):
         print('power!')
-        exec_string = ''' INSERT OR IGNORE INTO timeseriespower(SimId,AgentId,Time,Value)
-                          VALUES(?,?,?,?);'''
-        values = (str(self.context.sim_id), self.id, self.context.time, self.power_cap)
-        print('exec sring and values set')
-        print(exec_string)
-        print(values)
-        try:
-            self.cursor.execute(exec_string, values)
-        except Exception as e:
-            print(e)
-            raise ValueError()
-        print('recorded!')
+        datum = self.context.new_datum('timeseriespower')
+        datum = datum.add_val("AgentId", self.id, None, 'int')
+        datum = datum.add_val("Value", self.power_cap, None, 'double')
+        datum.record()
