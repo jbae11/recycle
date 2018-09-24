@@ -58,7 +58,7 @@ class saltproc_reactor(Facility):
 
     power_cap = ts.Float(
         doc="Power capacity of reactor",
-        tooltip="Power Capacity of reactor"
+        tooltip="Power Capacity"
     )
 
     waste_tank = ts.ResBufMaterialInv()
@@ -296,10 +296,15 @@ class saltproc_reactor(Facility):
                     qty = min(req.target.quantity, total_qty)
                     if self.driver_buf.empty():
                         break
-                    driver = self.driver_buf.peek()
-                    blanket = self.blanket_buf.peek()
-                    driver.absorb(blanket)
-                    bids.append({'request': req, 'offer': driver})
+                    # driver material
+                    driver_comp = self.array_to_comp_dict(self.driver_db[self.indx])
+
+                    driver_mat = ts.Material.create(self, self.driver_buf.quantity, driver_comp)
+                    blanket_comp = self.array_to_comp_dict(
+                        self.blanket_db[self.indx])
+                    blanket_mat = ts.Material.create(self, self.blanket_buf.quantity,blanket_comp)
+                    driver_mat.absorb(blanket_mat)
+                    bids.append({'request': req, 'offer': driver_mat})
             except KeyError:
                 print('No one is requesting ', self.final_fuel_commod)
                 # postpone shutdown..?
