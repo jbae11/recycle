@@ -5,18 +5,15 @@ from collections import defaultdict
 import numpy as np
 import scipy as sp
 import h5py
-import sqlite3 as lite
 
 from cyclus.agents import Institution, Agent, Facility
 from cyclus import lib
-import cyclus.simstate as ss
 import cyclus.typesystem as ts
 
 
 class saltproc_reactor(Facility):
     """
     This reactor imports an HDF5 file from a saltproc run (or a converted SCALE output).
-
     It imports the following data:
         surplus fissile output composition and isotopics in time
         waste output isotopics in time
@@ -59,9 +56,9 @@ class saltproc_reactor(Facility):
         tooltip="Absolute path to the hdf5 file"
     )
 
-    power_cap = ts.Double(
+    power_cap = ts.Float(
         doc="Power capacity of reactor",
-        tooltip="Power capacity of reactor"
+        tooltip="Power Capacity of reactor"
     )
 
     waste_tank = ts.ResBufMaterialInv()
@@ -84,14 +81,20 @@ class saltproc_reactor(Facility):
         self.num_isotopes = len(self.isos)
         self.waste_db = self.cum_to_nocum(self.f['waste tank composition'])
         self.fissile_db = self.cum_to_nocum(self.f['fissile tank composition'])
-        self.driver_refill = self.cum_to_nocum(self.f['driver refill tank composition'])
-        self.blanket_refill = self.cum_to_nocum(self.f['blanket refill tank composition'])
-        self.driver_db = self.cutoff_nonzero(self.f['driver composition after reproc'])
-        self.blanket_db = self.cutoff_nonzero(self.f['blanket composition after reproc'])
+        self.driver_refill = self.cum_to_nocum(
+            self.f['driver refill tank composition'])
+        self.blanket_refill = self.cum_to_nocum(
+            self.f['blanket refill tank composition'])
+        self.driver_db = self.cutoff_nonzero(
+            self.f['driver composition after reproc'])
+        self.blanket_db = self.cutoff_nonzero(
+            self.f['blanket composition after reproc'])
 
-        self.siminfo_timestep = int(self.f['siminfo_timestep'][()].decode('utf-8'))
+        self.siminfo_timestep = int(
+            self.f['siminfo_timestep'][()].decode('utf-8'))
         self.saltproc_timestep = self.siminfo_timestep * 24 * 3600
-        self.buf_dict = {'driver': self.driver_buf, 'blanket': self.blanket_buf}
+        self.buf_dict = {'driver': self.driver_buf,
+                         'blanket': self.blanket_buf}
         self.prev_indx = 0
         self.driver_mass = sum(self.driver_db[0])
         self.blanket_mass = sum(self.blanket_db[0])
@@ -105,10 +108,8 @@ class saltproc_reactor(Facility):
         self.loaded = False
         self.shutdown = False
 
-
     def cum_to_nocum(self, dataset):
         """ Convert cumulative array to non-cumulative array
-
         Parameters:
         -----------
         dataset: hdf5 dataset
@@ -118,7 +119,7 @@ class saltproc_reactor(Facility):
         for i in range(1, self.max_nonzero_indx):
             new_array[i] = dataset[i] - dataset[i-1]
         return new_array
-    
+
     def cutoff_nonzero(self, dataset):
         return dataset[: self.max_nonzero_indx]
 
@@ -131,9 +132,10 @@ class saltproc_reactor(Facility):
     def tick(self):
         print('tick')
         print('=============')
-        print('TIME IS %i' %self.context.time)
+        print('TIME IS %i' % self.context.time)
         if not self.fresh:
-            reactor_age_sec = self.context.dt * (self.context.time - self.start_time)
+            reactor_age_sec = self.context.dt * \
+                (self.context.time - self.start_time)
             timestep_at_hdf5 = int(reactor_age_sec / self.saltproc_timestep)
             if timestep_at_hdf5 < len(self.waste_db):
                 self.indx = timestep_at_hdf5
@@ -153,12 +155,10 @@ class saltproc_reactor(Facility):
             self.indx_tuple = (self.prev_indx, self.indx)
             self.prev_indx = self.indx + 1
 
-            
         for key, val in self.buf_dict.items():
-            print('%s qty: %f' %(key, val.quantity))
+            print('%s qty: %f' % (key, val.quantity))
         print('tickend')
         print('=============')
-
 
     def check_core_full(self):
         for key, val in self.buf_dict.items():
@@ -173,12 +173,13 @@ class saltproc_reactor(Facility):
         if self.check_core_full():
             self.loaded = True
             print('REACTOR IS LOADED')
-            # self.record_power()
+            self.produce_power()
             if self.fresh:
                 self.start_time = self.context.time
                 self.fresh = False
         elif self.context.time != self.exit_time:
-            print('DRIVER OR BLANKET IS NOT FULL IN TIME %s \n\n' %self.context.time)
+            print('DRIVER OR BLANKET IS NOT FULL IN TIME %s \n\n' %
+                  self.context.time)
             self.loaded = False
 
         print('tockend')
@@ -199,7 +200,7 @@ class saltproc_reactor(Facility):
         if waste_mass != 0:
             material = ts.Material.create(self, waste_mass, waste_comp)
             self.waste_tank.push(material)
-            print('PUSHED %f kg of WASTE INTO WASTE TANK' %waste_mass)
+            print('PUSHED %f kg of WASTE INTO WASTE TANK' % waste_mass)
 
     def get_fissile(self):
         fissile_dump = np.zeros(self.num_isotopes)
@@ -214,10 +215,10 @@ class saltproc_reactor(Facility):
         if fissile_mass != 0:
             material = ts.Material.create(self, fissile_mass, fissile_comp)
             self.fissile_tank.push(material)
-            print('PUSHED %f kg of FISSILE MATERIAL INTO FISSILE TANK' %fissile_mass)
+            print('PUSHED %f kg of FISSILE MATERIAL INTO FISSILE TANK' %
+                  fissile_mass)
         else:
             print('There is no fissile material to push')
-
 
     def get_fill_demand(self):
         self.get_fill = False
@@ -247,11 +248,11 @@ class saltproc_reactor(Facility):
 
         fill_comp_dict = self.array_to_comp_dict(self.fill_comp)
         if bool(fill_comp_dict):
-            print('I WANT %f kg Fill material' %(self.qty))
-            self.demand_mat = ts.Material.create_untracked(self.qty, fill_comp_dict)
+            print('I WANT %f kg Fill material' % (self.qty))
+            self.demand_mat = ts.Material.create_untracked(
+                self.qty, fill_comp_dict)
         if self.qty != 0.0:
             self.get_fill = True
-
 
     def get_material_bids(self, requests):
         """ Gets material bids that want its `outcommod' and
@@ -273,16 +274,16 @@ class saltproc_reactor(Facility):
                 bids.append({'request': req, 'offer': mat})
         except KeyError:
             print('No one is requesting ', self.waste_commod)
-        
+
         try:
             reqs = requests[self.fissile_out_commod]
             for req in reqs:
                 qty = min(req.target.quantity, self.fissile_tank.quantity)
                 if self.fissile_tank.empty():
                     break
-                next_in_line =self.fissile_tank.peek()
+                next_in_line = self.fissile_tank.peek()
                 mat = ts.Material.create_untracked(qty, next_in_line.comp())
-                bids.append({'request': req, 'offer':mat})
+                bids.append({'request': req, 'offer': mat})
         except KeyError:
             print('No one is requesting ', self.fissile_out_commod)
 
@@ -308,7 +309,6 @@ class saltproc_reactor(Facility):
         print('get material bids')
         print(port)
         return port
-    
 
     def get_material_trades(self, trades):
         """ Give out waste_commod and fissile_out_commod from
@@ -324,8 +324,10 @@ class saltproc_reactor(Facility):
             if commodity == self.fissile_out_commod:
                 mat_list = self.fissile_tank.pop_n(self.fissile_tank.count)
             if commodity == self.final_fuel_commod:
-                blank_comp = self.array_to_comp_dict(self.blanket_db[self.prev_indx, :])
-                driver_comp = self.array_to_comp_dict(self.driver_db[self.prev_indx, :])
+                blank_comp = self.array_to_comp_dict(
+                    self.blanket_db[self.prev_indx, :])
+                driver_comp = self.array_to_comp_dict(
+                    self.driver_db[self.prev_indx, :])
                 blank = ts.Material.create(self, self.blanket_mass, blank_comp)
                 driv = ts.Material.create(self, self.driver_mass, driver_comp)
                 driv.absorb(blank)
@@ -336,7 +338,6 @@ class saltproc_reactor(Facility):
                 mat_list[0].absorb(mat)
             responses[trade] = mat_list[0]
         return responses
-
 
     def get_material_requests(self):
         """ Ask for material fill_commod """
@@ -350,9 +351,11 @@ class saltproc_reactor(Facility):
             mat = {}
             for key, val in self.buf_dict.items():
                 if 'driver' in key:
-                    recipes[key] = self.array_to_comp_dict(self.f['siminfo_driver_init_comp'])
+                    recipes[key] = self.array_to_comp_dict(
+                        self.f['siminfo_driver_init_comp'])
                 if 'blanket' in key:
-                    recipes[key] = self.array_to_comp_dict(self.f['siminfo_blanket_init_comp'])
+                    recipes[key] = self.array_to_comp_dict(
+                        self.f['siminfo_blanket_init_comp'])
                 qty[key] = val.capacity - val.quantity
                 mat[key] = ts.Material.create_untracked(qty[key], recipes[key])
 
@@ -389,10 +392,5 @@ class saltproc_reactor(Facility):
                 dictionary[iso] = val
         return dictionary
 
-
-    def record_power(self):
-        print('power!')
-        datum = self.context.new_datum('timeseriespower')
-        datum = datum.add_val("AgentId", self.id, None, 'int')
-        datum = datum.add_val("Value", self.power_cap, None, 'double')
-        datum.record()
+    def produce_power(self):
+        lib.record_time_series('POWER', self, self.power_cap)
