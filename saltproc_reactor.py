@@ -79,6 +79,7 @@ class saltproc_reactor(Facility):
         # subject to change
         self.isos = self.f['iso names']
         self.num_isotopes = len(self.isos)
+        print(self.max_nonzero_indx)
         self.waste_db = self.cum_to_nocum(self.f['waste tank composition'])
         self.fissile_db = self.cum_to_nocum(self.f['fissile tank composition'])
         self.driver_refill = self.cum_to_nocum(
@@ -128,6 +129,7 @@ class saltproc_reactor(Facility):
         for i in range(self.tot_timesteps):
             if sum(self.f['driver composition after reproc'][i]) == 0:
                 return i - 1
+        return self.tot_timesteps
 
     def tick(self):
         print('tick')
@@ -152,6 +154,7 @@ class saltproc_reactor(Facility):
             # push fissile from db to fissile_tank
             self.get_fissile()
             self.get_fill_demand()
+            print('passsed get fill demand')
             self.indx_tuple = (self.prev_indx, self.indx)
             self.prev_indx = self.indx + 1
 
@@ -159,6 +162,10 @@ class saltproc_reactor(Facility):
             print('%s qty: %f' % (key, val.quantity))
         print('tickend')
         print('=============')
+        if self.indx != self.prev_indx and self.context.time != 0:
+            print(self.context.time)
+            raise ValueError()
+
 
     def check_core_full(self):
         for key, val in self.buf_dict.items():
@@ -191,7 +198,7 @@ class saltproc_reactor(Facility):
         waste_comp = {}
         # lump all the waste generated in this timestep
         # into one waste dump
-        for t in np.arange(self.prev_indx, self.indx):
+        for t in np.arange(self.prev_indx, self.indx + 1):
             waste_dump += self.waste_db[t, :]
         # convert this into a dictionary
 
@@ -206,7 +213,7 @@ class saltproc_reactor(Facility):
         fissile_dump = np.zeros(self.num_isotopes)
         fissile_comp = {}
 
-        for t in np.arange(self.prev_indx, self.indx):
+        for t in np.arange(self.prev_indx, self.indx + 1):
             fissile_dump += self.fissile_db[t, :]
 
         fissile_mass = sum(fissile_dump)
@@ -229,7 +236,7 @@ class saltproc_reactor(Facility):
             demands[bufs] = np.zeros(self.num_isotopes)
         fill_comp_dict = {}
         # since the data is in negative:
-        for t in np.arange(self.prev_indx, self.indx):
+        for t in np.arange(self.prev_indx, self.indx + 1):
             for key, val in demands.items():
                 if 'driver' in key:
                     demands[key] += -1.0 * self.driver_refill[t, :]
@@ -239,11 +246,12 @@ class saltproc_reactor(Facility):
         for key, val in demands.items():
             masses[key] = sum(val)
 
-        for key, val in self.buf_dict.items():
-            val.pop(masses[key])
         self.qty = sum(masses.values())
         if (self.qty) == 0:
             return 0
+
+        for key, val in self.buf_dict.items():
+            val.pop(masses[key])
         self.fill_comp = sum(demands.values())
 
         fill_comp_dict = self.array_to_comp_dict(self.fill_comp)
