@@ -79,7 +79,6 @@ class saltproc_reactor(Facility):
         # subject to change
         self.isos = self.f['iso names']
         self.num_isotopes = len(self.isos)
-        print(self.max_nonzero_indx)
         self.waste_db = self.cum_to_nocum(self.f['waste tank composition'])
         self.fissile_db = self.cum_to_nocum(self.f['fissile tank composition'])
         self.driver_refill = self.cum_to_nocum(
@@ -132,9 +131,6 @@ class saltproc_reactor(Facility):
         return self.tot_timesteps
 
     def tick(self):
-        print('tick')
-        print('=============')
-        print('TIME IS %i' % self.context.time)
         if not self.fresh:
             reactor_age_sec = self.context.dt * \
                 (self.context.time - self.start_time)
@@ -148,24 +144,13 @@ class saltproc_reactor(Facility):
             self.indx = -1
         # if reactor is `on'
         if self.indx > 0:
-            print('INDX, PREV INDX', self.indx, self.prev_indx)
             # push waste from db to waste_tank
             self.get_waste()
             # push fissile from db to fissile_tank
             self.get_fissile()
             self.get_fill_demand()
-            print('passsed get fill demand')
             self.indx_tuple = (self.prev_indx, self.indx)
             self.prev_indx = self.indx + 1
-
-        for key, val in self.buf_dict.items():
-            print('%s qty: %f' % (key, val.quantity))
-        print('tickend')
-        print('=============')
-        if self.indx != self.prev_indx and self.context.time != 0:
-            print(self.context.time)
-            raise ValueError()
-
 
     def check_core_full(self):
         for key, val in self.buf_dict.items():
@@ -175,24 +160,16 @@ class saltproc_reactor(Facility):
 
     def tock(self):
         # check if core is full;
-        print('=============')
-        print('tock')
         if self.check_core_full():
             self.loaded = True
-            print('REACTOR IS LOADED')
             self.produce_power()
             if self.fresh:
                 self.start_time = self.context.time
                 self.fresh = False
         elif self.context.time != self.exit_time:
-            print('DRIVER OR BLANKET IS NOT FULL IN TIME %s \n\n' %
-                  self.context.time)
             self.loaded = False
 
-        print('tockend')
-        print('=============')
-        print('\n\n')
-
+        
     def get_waste(self):
         waste_dump = np.zeros(self.num_isotopes)
         waste_comp = {}
@@ -207,8 +184,7 @@ class saltproc_reactor(Facility):
         if waste_mass != 0:
             material = ts.Material.create(self, waste_mass, waste_comp)
             self.waste_tank.push(material)
-            print('PUSHED %f kg of WASTE INTO WASTE TANK' % waste_mass)
-
+            
     def get_fissile(self):
         fissile_dump = np.zeros(self.num_isotopes)
         fissile_comp = {}
@@ -222,11 +198,8 @@ class saltproc_reactor(Facility):
         if fissile_mass != 0:
             material = ts.Material.create(self, fissile_mass, fissile_comp)
             self.fissile_tank.push(material)
-            print('PUSHED %f kg of FISSILE MATERIAL INTO FISSILE TANK' %
-                  fissile_mass)
-        else:
-            print('There is no fissile material to push')
 
+            
     def get_fill_demand(self):
         self.get_fill = False
 
@@ -256,7 +229,6 @@ class saltproc_reactor(Facility):
 
         fill_comp_dict = self.array_to_comp_dict(self.fill_comp)
         if bool(fill_comp_dict):
-            print('I WANT %f kg Fill material' % (self.qty))
             self.demand_mat = ts.Material.create_untracked(
                 self.qty, fill_comp_dict)
         if self.qty != 0.0:
@@ -266,7 +238,6 @@ class saltproc_reactor(Facility):
         """ Gets material bids that want its `outcommod' and
             returns bid portfolio
         """
-        print('get material bids')
         bids = []
         # waste commods
         try:
@@ -319,19 +290,16 @@ class saltproc_reactor(Facility):
         if len(bids) == 0:
             return
         port = {"bids": bids}
-        print('get material bids')
-        print(port)
         return port
 
     def get_material_trades(self, trades):
         """ Give out waste_commod and fissile_out_commod from
             waste_tank and fissile_tank, respectively.
         """
-        print('get material trades')
         responses = {}
         for trade in trades:
             commodity = trade.request.commodity
-            print(commodity)
+        
             if commodity == self.waste_commod:
                 mat_list = self.waste_tank.pop_n(self.waste_tank.count)
             if commodity == self.fissile_out_commod:
@@ -354,7 +322,6 @@ class saltproc_reactor(Facility):
 
     def get_material_requests(self):
         """ Ask for material fill_commod """
-        print('get material requests')
         ports = []
         if self.shutdown:
             return {}
@@ -387,7 +354,6 @@ class saltproc_reactor(Facility):
         return []
 
     def accept_material_trades(self, responses):
-        print('accept material trades')
         """ Get fill_commod and store it into fill_tank """
         for key, mat in responses.items():
             if key.request.commodity == self.init_fuel_commod and not self.loaded:
@@ -406,4 +372,5 @@ class saltproc_reactor(Facility):
         return dictionary
 
     def produce_power(self):
-        lib.record_time_series('POWER', self, self.power_cap)
+        print('Producing power')
+        lib.record_time_series('POWER', self, float(self.power_cap))
