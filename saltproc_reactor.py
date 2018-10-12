@@ -154,7 +154,7 @@ class saltproc_reactor(Facility):
 
     def check_core_full(self):
         for key, val in self.buf_dict.items():
-            if val.quantity != val.capacity:
+            if (val.capacity - val.quantity) > 1:
                 return False
         return True
 
@@ -168,8 +168,9 @@ class saltproc_reactor(Facility):
                 self.fresh = False
         elif self.context.time != self.exit_time:
             self.loaded = False
+            self.produce_power(False)
 
-        
+
     def get_waste(self):
         waste_dump = np.zeros(self.num_isotopes)
         waste_comp = {}
@@ -184,7 +185,7 @@ class saltproc_reactor(Facility):
         if waste_mass != 0:
             material = ts.Material.create(self, waste_mass, waste_comp)
             self.waste_tank.push(material)
-            
+
     def get_fissile(self):
         fissile_dump = np.zeros(self.num_isotopes)
         fissile_comp = {}
@@ -199,7 +200,6 @@ class saltproc_reactor(Facility):
             material = ts.Material.create(self, fissile_mass, fissile_comp)
             self.fissile_tank.push(material)
 
-            
     def get_fill_demand(self):
         self.get_fill = False
 
@@ -276,12 +276,15 @@ class saltproc_reactor(Facility):
                     if self.driver_buf.empty():
                         break
                     # driver material
-                    driver_comp = self.array_to_comp_dict(self.driver_db[self.indx])
+                    driver_comp = self.array_to_comp_dict(
+                        self.driver_db[self.indx])
 
-                    driver_mat = ts.Material.create(self, self.driver_buf.quantity, driver_comp)
+                    driver_mat = ts.Material.create(
+                        self, self.driver_buf.quantity, driver_comp)
                     blanket_comp = self.array_to_comp_dict(
                         self.blanket_db[self.indx])
-                    blanket_mat = ts.Material.create(self, self.blanket_buf.quantity,blanket_comp)
+                    blanket_mat = ts.Material.create(
+                        self, self.blanket_buf.quantity, blanket_comp)
                     driver_mat.absorb(blanket_mat)
                     bids.append({'request': req, 'offer': driver_mat})
             except KeyError:
@@ -299,7 +302,7 @@ class saltproc_reactor(Facility):
         responses = {}
         for trade in trades:
             commodity = trade.request.commodity
-        
+
             if commodity == self.waste_commod:
                 mat_list = self.waste_tank.pop_n(self.waste_tank.count)
             if commodity == self.fissile_out_commod:
@@ -371,6 +374,8 @@ class saltproc_reactor(Facility):
                 dictionary[iso] = val
         return dictionary
 
-    def produce_power(self):
-        print('Producing power')
-        lib.record_time_series('POWER', self, float(self.power_cap))
+    def produce_power(self, produce=True):
+        if produce:
+            lib.record_time_series(lib.POWER, self, float(self.power_cap))
+        else:
+            lib.record_time_series(lib.POWER, self, 0)
