@@ -57,7 +57,7 @@ TEMPLATE = {
                 {"lib": "saltproc_reactor.saltproc_reactor", "name": "saltproc_reactor"}
             ]
         },
-        "control": {"duration": "10", "startmonth": "1", "startyear": "2000"},
+        "control": {"duration": "20", "startmonth": "1", "startyear": "2000"},
         "recipe": [
             {
                 "basis": "mass",
@@ -73,17 +73,17 @@ TEMPLATE = {
         "facility": [{
             "config": {"Source": {"outcommod": "init_fuel",
                                   "outrecipe": "fresh_uox",
-                                  "throughput": "3000"}},
+                                  "throughput": "1e200"}},
             "name": "source"
         },
         {
                     "config": {"Source": {"outcommod": "fill",
                                       "outrecipe": "fresh_uox",
-                                      "throughput": "3000"}},
+                                      "throughput": "1e200"}},
                 "name": "fill_source"
         },
         {
-            "config": {"Sink": {"in_commods": {"val": ["waste", "end_fuel"]}, 
+            "config": {"Sink": {"in_commods": {"val": ["waste", "end_fuel", "fissile_out", "fuel_out"]}, 
                                 "max_inv_size": "1e6"}},
             "name": "sink"
         },
@@ -97,7 +97,7 @@ TEMPLATE = {
                                                         'power_cap': '100'})
             },
             "name": "reactor",
-            "lifetime": 5
+            "lifetime": 15
         }]
     }
 }
@@ -127,3 +127,35 @@ def test_run_input():
     s = subprocess.check_output(['cyclus', '-o', output_file, input_file],
                              universal_newlines=True)
     assert('Cyclus run successful!' in s)
+
+def test_init_fuel():
+    cur = get_cursor('test_output.sqlite')
+    init_fuel_in = cur.execute('SELECT quantity FROM transactions INNER JOIN resources '
+                               'ON resources.resourceid = transactions.resourceid '
+                               'WHERE commodity = "init_fuel"').fetchone()[0]
+    assert pytest.approx(init_fuel_in, 0.1) == 200159.6062
+
+
+def test_waste_output():
+    cur = get_cursor('test_output.sqlite')
+    count = cur.execute('SELECT count() FROM transactions where commodity = "waste"').fetchone()[0]
+    assert (count == 14)
+
+
+def test_fill_intake():
+    cur = get_cursor('test_output.sqlite')
+    count = cur.execute(
+        'SELECT count() FROM transactions where commodity = "fill"').fetchone()[0]
+    assert (count == 13)
+
+def test_power_gen():
+    cur = get_cursor('test_output.sqlite')
+    count = cur.execute('SELECT count() FROM timeseriespower').fetchone()[0]
+    assert (count == 14)
+
+def test_outfuel():
+    cur = get_cursor('test_output.sqlite')
+    outfuel = cur.execute('SELECT quantity FROM transactions INNER JOIN resources '
+                          'ON resources.resourceid = transactions.resourceid '
+                          'WHERE commodity = "fuel_out"').fetchone()[0]
+    assert pytest.approx(outfuel, 0.1) == 200159.6062
